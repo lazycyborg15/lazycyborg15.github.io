@@ -363,6 +363,12 @@
 
         document.getElementById('checkout-form').addEventListener('submit', async function(event) {
             event.preventDefault();
+
+            if (!localStorage.getItem('pynx_logged_in')) {
+                checkCheckoutAuth();
+                return;
+            }
+
             const firstName = document.getElementById('checkout-first-name').value.trim();
             const lastName = document.getElementById('checkout-last-name').value.trim();
             const address = document.getElementById('checkout-address').value.trim();
