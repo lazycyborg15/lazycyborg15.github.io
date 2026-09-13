@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
+<body class="checkout-page">
 <header id="site-header">
     <a class="logo" href="index.html#home">
         <span class="header-logo-text">PYNX</span>
@@ -31,6 +31,12 @@
                 <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
                 <span class="cart-badge" id="cart-badge">0</span>
             </button>
+            <button class="menu-toggle checkout-mobile-menu" id="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="menu-dropdown" id="menu-dropdown">
+                <a href="index.html#home" onclick="closeMenuDropdown()">Home</a>
+            </div>
         </div>
     </div>
 </header>
@@ -287,12 +293,13 @@
         }
     </script>
     <script>
-        const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+        // Renamed to avoid clashing with the global API_BASE declared in js/script.js.
+        const CHECKOUT_API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
             ? 'http://localhost:5000'
             : '';
 
         function getApiUrl(path) {
-            return `${API_BASE}${path}`;
+            return `${CHECKOUT_API_BASE}${path}`;
         }
 
         function isHostedStaticMode() {

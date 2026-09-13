@@ -236,6 +236,9 @@
         .menu-toggle.open span:nth-child(2) { opacity: 0; }
         .menu-toggle.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
+        /* Checkout keeps customers focused: hamburger menu only appears on mobile, as a way back home. */
+        .checkout-page .menu-toggle { display: none; }
+
         .menu-dropdown {
             position: absolute;
             top: calc(100% + 0.75rem);
@@ -797,6 +800,7 @@
 
             nav ul { display: none; }
             .menu-toggle { display: flex; }
+            .checkout-page .menu-toggle { display: flex; }
 
             .header-right { gap: .8rem; }
 
