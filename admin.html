@@ -226,8 +226,8 @@
         adminStatus.textContent = 'Showing orders saved on this device.';
         adminStatus.classList.remove('error', 'loading');
         orderCount.textContent = `${orders.length} order(s)`;
-        totalRevenue.textContent = `₱${revenue.toFixed(2)}`;
-        avgOrder.textContent = `₱${(orders.length ? revenue / orders.length : 0).toFixed(2)}`;
+        document.getElementById('total-revenue').textContent = `₱${revenue.toFixed(2)}`;
+        document.getElementById('avg-order').textContent = `₱${(orders.length ? revenue / orders.length : 0).toFixed(2)}`;
         lastRefresh.textContent = 'Local mode';
 
         ordersList.innerHTML = orders.length ? orders.map((order, index) => {
@@ -404,9 +404,9 @@
         let statusMessage = 'Customer concerns are displayed below.';
         let statusError = false;
 
-        if (!token) {
-            // If not logged in, show local submissions only
-            contactsStatus.textContent = 'Showing local submissions. Log in to see backend entries.';
+        if (!token || token === 'local-admin-session') {
+            // If not logged in to a real backend, show local submissions only
+            contactsStatus.textContent = 'Showing customer concerns saved on this device.';
             contactsStatus.classList.remove('error');
             document.getElementById('concerns-count').textContent = `${contacts.length} concern(s)`;
             document.getElementById('last-concern-time').textContent = contacts.length > 0 ? new Date(contacts[0].createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No data';
@@ -561,10 +561,86 @@
         }
     }
 
+    const PRODUCT_OVERRIDES_KEY = 'pynx_product_overrides';
+
+    function loadProductOverrides() {
+        try {
+            return JSON.parse(localStorage.getItem(PRODUCT_OVERRIDES_KEY) || '{}');
+        } catch (err) {
+            console.error('Failed to parse product overrides:', err);
+            return {};
+        }
+    }
+
+    function saveProductOverrides(overrides) {
+        localStorage.setItem(PRODUCT_OVERRIDES_KEY, JSON.stringify(overrides));
+    }
+
+    function isLocalProductMode() {
+        return getToken() === 'local-admin-session';
+    }
+
+    async function loadLocalProducts() {
+        const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Product catalog not available.');
+        const base = await response.json();
+        const overrides = loadProductOverrides();
+        return base.map(product => (overrides[product.id] ? { ...product, ...overrides[product.id] } : product));
+    }
+
+    function renderProductsList(products) {
+        productsStatus.textContent = 'Editable products loaded.';
+        productsStatus.classList.remove('error');
+        productCount.textContent = `${products.length} product(s)`;
+        const saleItems = products.filter(p => p.onSale || (typeof p.originalPrice === 'number' && p.originalPrice > p.price));
+        saleCount.textContent = `${saleItems.length} sale item(s)`;
+
+        productsList.innerHTML = products.map(product => {
+            const isDiscount = product.onSale || (typeof product.originalPrice === 'number' && product.originalPrice > product.price);
+            const saleBadge = isDiscount ? `<span class="item-badge sale-badge">Discount</span>` : '';
+            return `<div class="product-card admin-product-card">
+                <div class="product-card-body">
+                    <div class="admin-product-header">
+                        <span class="product-name">${product.name}</span>
+                        ${saleBadge}
+                    </div>
+                    <div class="product-edit-row">
+                        <label>Price</label>
+                        <input type="number" min="0" step="0.01" value="${product.price}" id="product-price-${product.id}">
+                    </div>
+                    <div class="product-edit-row">
+                        <label>Original Price</label>
+                        <input type="number" min="0" step="0.01" value="${product.originalPrice ?? product.price}" id="product-original-${product.id}">
+                    </div>
+                    <div class="product-edit-row">
+                        <label>On Sale</label>
+                        <input type="checkbox" id="product-onsale-${product.id}" ${product.onSale ? 'checked' : ''}>
+                    </div>
+                            <div class="product-edit-actions">
+                                <button class="btn-secondary" onclick="saveProduct(${product.id})">Save</button>
+                                ${isDiscount ? `<button class="btn-secondary" onclick="toggleSale(${product.id}, false)">Remove Discount</button>` : `<button class="btn-primary" onclick="toggleSale(${product.id}, true)">Add Discount</button>`}
+                            </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     async function fetchProducts() {
         const token = getToken();
         if (!token) {
             showLogin();
+            return;
+        }
+
+        if (isLocalProductMode()) {
+            try {
+                const products = await loadLocalProducts();
+                renderProductsList(products);
+            } catch (error) {
+                productsStatus.textContent = error.message || 'Unable to load products.';
+                productsStatus.classList.add('error');
+                productsList.innerHTML = '<div class="empty-state-card">Products cannot be loaded right now.</div>';
+            }
             return;
         }
 
@@ -576,41 +652,7 @@
             if (!response.ok || !data.success) {
                 throw new Error(data.message || 'Unable to load products.');
             }
-
-            productsStatus.textContent = 'Editable products loaded.';
-            productsStatus.classList.remove('error');
-            productCount.textContent = `${data.products.length} product(s)`;
-            const saleItems = data.products.filter(p => p.onSale || (typeof p.originalPrice === 'number' && p.originalPrice > p.price));
-            saleCount.textContent = `${saleItems.length} sale item(s)`;
-
-            productsList.innerHTML = data.products.map(product => {
-                const isDiscount = product.onSale || (typeof product.originalPrice === 'number' && product.originalPrice > product.price);
-                const saleBadge = isDiscount ? `<span class="item-badge sale-badge">Discount</span>` : '';
-                return `<div class="product-card admin-product-card">
-                    <div class="product-card-body">
-                        <div class="admin-product-header">
-                            <span class="product-name">${product.name}</span>
-                            ${saleBadge}
-                        </div>
-                        <div class="product-edit-row">
-                            <label>Price</label>
-                            <input type="number" min="0" step="0.01" value="${product.price}" id="product-price-${product.id}">
-                        </div>
-                        <div class="product-edit-row">
-                            <label>Original Price</label>
-                            <input type="number" min="0" step="0.01" value="${product.originalPrice ?? product.price}" id="product-original-${product.id}">
-                        </div>
-                        <div class="product-edit-row">
-                            <label>On Sale</label>
-                            <input type="checkbox" id="product-onsale-${product.id}" ${product.onSale ? 'checked' : ''}>
-                        </div>
-                                <div class="product-edit-actions">
-                                    <button class="btn-secondary" onclick="saveProduct(${product.id})">Save</button>
-                                    ${isDiscount ? `<button class="btn-secondary" onclick="toggleSale(${product.id}, false)">Remove Discount</button>` : `<button class="btn-primary" onclick="toggleSale(${product.id}, true)">Add Discount</button>`}
-                                </div>
-                    </div>
-                </div>`;
-            }).join('');
+            renderProductsList(data.products);
         } catch (error) {
             productsStatus.textContent = error.message;
             productsStatus.classList.add('error');
@@ -626,6 +668,16 @@
 
         if (!token) {
             showLogin();
+            return;
+        }
+
+        if (isLocalProductMode()) {
+            const overrides = loadProductOverrides();
+            overrides[productId] = { price, originalPrice, onSale };
+            saveProductOverrides(overrides);
+            productsStatus.textContent = 'Product saved on this device.';
+            productsStatus.classList.remove('error');
+            fetchProducts();
             return;
         }
 
@@ -659,8 +711,19 @@
         }
         const priceEl = document.getElementById(`product-price-${productId}`);
         const originalEl = document.getElementById(`product-original-${productId}`);
-        const price = Number(priceEl ? priceEl.value : 0);
-        const originalPrice = Number(originalEl ? originalEl.value : price);
+        const originalPrice = Number(originalEl ? originalEl.value : 0);
+        // Removing a discount automatically restores the original price.
+        const price = makeSale ? Number(priceEl ? priceEl.value : 0) : originalPrice;
+
+        if (isLocalProductMode()) {
+            const overrides = loadProductOverrides();
+            overrides[productId] = { price, originalPrice, onSale: Boolean(makeSale) };
+            saveProductOverrides(overrides);
+            productsStatus.textContent = makeSale ? 'Marked as discounted on this device.' : 'Discount removed; price restored on this device.';
+            productsStatus.classList.remove('error');
+            fetchProducts();
+            return;
+        }
 
         try {
             productsStatus.textContent = makeSale ? 'Marking as discounted...' : 'Removing discount...';
@@ -684,6 +747,7 @@
             productsStatus.classList.add('error');
         }
     }
+
 
     adminLoginForm.addEventListener('submit', async function(event) {
         event.preventDefault();

@@ -65,27 +65,21 @@
     </div>
 </section>
 
-<section class="section" style="padding-top: 80px; padding-bottom: 100px;">
+<section class="section" id="shop-categories-section" style="padding-top: 80px; padding-bottom: 100px;">
     <div class="section-header reveal">
         <p class="section-eyebrow">Shop By Category</p>
-        <h2 class="section-title">EXPLORE THE COLLECTION</h2>
+        <h2 class="section-title">EXPLORE THE COLLECTIONS</h2>
     </div>
-    <div class="shop-category-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem; max-width: 1100px; margin: 2.5rem auto 0; padding: 0 1.5rem;">
-        <a href="caps.html" class="shop-category-card shop-category-card-dark reveal" style="display:flex; flex-direction:column; justify-content:space-between; min-height: 270px; padding: 2rem; border-radius: 24px; background: linear-gradient(180deg, rgba(17,17,17,0.96), rgba(17,17,17,0.82)); color: #f0f0eb; text-decoration: none; box-shadow: 0 24px 60px rgba(17,17,17,0.12);">
-            <span style="font-size: .72rem; letter-spacing: .38rem; text-transform: uppercase; color: rgba(240,240,235,.72);">Headwear</span>
-            <div>
-                <h3 style="font-family: 'Bebas Neue', Arial, sans-serif; font-size: 3.1rem; letter-spacing: .2rem; margin: 0 0 .5rem;">Caps</h3>
-                <p style="margin: 0; color: rgba(240,240,235,.8); line-height: 1.6;">Structured silhouettes and elevated essentials built for everyday wear.</p>
-            </div>
-        </a>
-        <a href="bikini.html" class="shop-category-card shop-category-card-light reveal" style="display:flex; flex-direction:column; justify-content:space-between; min-height: 270px; padding: 2rem; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240,240,235,0.9)); color: #111; text-decoration: none; box-shadow: 0 24px 60px rgba(17,17,17,0.08);">
-            <span style="font-size: .72rem; letter-spacing: .38rem; text-transform: uppercase; color: rgba(17,17,17,.68);">Swimwear</span>
-            <div>
-                <h3 style="font-family: 'Bebas Neue', Arial, sans-serif; font-size: 3.1rem; letter-spacing: .2rem; margin: 0 0 .5rem;">Bikini</h3>
-                <p style="margin: 0; color: rgba(17,17,17,.78); line-height: 1.6;">Clean lines, soft coverage, and tonal pieces designed for motion.</p>
-            </div>
-        </a>
+    <div class="shop-category-grid" id="shop-category-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem; max-width: 1100px; margin: 2.5rem auto 0; padding: 0 1.5rem;"></div>
+</section>
+
+<section class="section section--white" id="shop-collection-section" style="display:none; padding-top: 20px; padding-bottom: 100px;">
+    <div class="section-header reveal">
+        <p class="section-eyebrow" id="collection-eyebrow">Collection</p>
+        <h2 class="section-title" id="collection-title">COLLECTION</h2>
+        <a href="shop.html" class="btn-secondary" style="display:inline-block; margin-top:1.2rem;">← Back to Collections</a>
     </div>
+    <div class="product-grid" id="collection-grid"></div>
 </section>
 
 <footer>

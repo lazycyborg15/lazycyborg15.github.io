@@ -88,7 +88,8 @@ async function loadProductCatalog() {
         if (!response.ok) throw new Error('Product catalog not available');
         const data = await response.json();
         if (Array.isArray(data) && data.length) {
-            PRODUCTS = data;
+            const overrides = loadProductOverrides();
+            PRODUCTS = data.map(product => overrides[product.id] ? { ...product, ...overrides[product.id] } : product);
             let cartChanged = false;
             cart = cart.map(item => {
                 const currentProduct = PRODUCTS.find(product => product.id === item.product?.id);
@@ -102,6 +103,25 @@ async function loadProductCatalog() {
         console.warn('Unable to load product catalog from products.json, using built-in data.', err);
     }
 }
+
+function loadProductOverrides() {
+    try {
+        return JSON.parse(localStorage.getItem('pynx_product_overrides') || '{}');
+    } catch (err) {
+        console.error('Failed to parse product overrides:', err);
+        return {};
+    }
+}
+
+// Reflect admin discount changes made in another tab without requiring a manual reload.
+window.addEventListener('storage', function (e) {
+    if (e.key === 'pynx_product_overrides') {
+        loadProductCatalog().finally(() => {
+            renderProducts();
+            if (typeof renderShopCollections === 'function') renderShopCollections();
+        });
+    }
+});
 
 function renderProducts() {
     const capsGrid = document.getElementById('caps-grid');
@@ -117,14 +137,16 @@ function renderProducts() {
 
 function cardHTML(p) {
     const isShopPage = document.body.classList.contains('shop-page');
+    const isIndexPage = document.body.classList.contains('index-page');
+    const canBuy = isShopPage || isIndexPage;
     const currentPrice = Number(p.price) || 0;
     const originalPrice = Number(p.originalPrice) || currentPrice;
     const isDiscount = Boolean(p.onSale) || originalPrice > currentPrice;
-    const priceHTML = isShopPage ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
-    const originalPriceHTML = isShopPage && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
+    const priceHTML = canBuy ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
+    const originalPriceHTML = canBuy && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
     const saleBadge = isDiscount ? `<span class="product-sale-badge">Sale</span>` : '';
     const isAdmin = Boolean(localStorage.getItem('pynx_admin_token'));
-    const actionOverlay = isShopPage ? `
+    const actionOverlay = canBuy ? `
             <div class="product-overlay">
                 <button class="quick-add" onclick="event.stopPropagation();quickAdd(${p.id})">Quick Add</button>
             </div>` : '';
@@ -158,6 +180,7 @@ function openModal(id, preselectedSize = null) {
     currentProduct = p;
     selectedSize   = preselectedSize;
     const isShopPage = document.body.classList.contains('shop-page');
+    const canBuy = isShopPage || document.body.classList.contains('index-page');
 
     document.getElementById('modal-img').innerHTML   = `<span>${p.emoji}</span>`;
     document.getElementById('modal-img').style.background = p.bg + '15';
@@ -177,9 +200,9 @@ function openModal(id, preselectedSize = null) {
 
     modalPriceEl.textContent = `₱${p.price}.00`;
     modalPriceEl.style.display = '';
-    modalAddBtn.style.display = isShopPage ? '' : 'none';
+    modalAddBtn.style.display = canBuy ? '' : 'none';
 
-    if (isShopPage && p.sizes && p.sizes.length) {
+    if (canBuy && p.sizes && p.sizes.length) {
         sizeLabelEl.textContent = 'Choose Your Size';
         sizeLabelEl.style.display = '';
         sizeGridEl.innerHTML = p.sizes
@@ -291,7 +314,7 @@ function saveAdminProduct() {
 
 function addFromModal() {
     if (!currentProduct) return;
-    if (!document.body.classList.contains('shop-page')) return;
+    if (!document.body.classList.contains('shop-page') && !document.body.classList.contains('index-page')) return;
     if (currentProduct.sizes && currentProduct.sizes.length && !selectedSize) {
         const existingItem = cart.find(i => i.key === editingCartKey);
         if (existingItem) {
@@ -911,25 +934,73 @@ function updateCustomerAuthLinks() {
     });
 }
 
-function routeShopCategory() {
+/* ────────────────────────────────────────
+   SHOP COLLECTIONS (dynamic per product type)
+──────────────────────────────────────── */
+const COLLECTION_META = {
+    cap:    { label: 'Caps',   eyebrow: 'Headwear', desc: 'Structured silhouettes and elevated essentials built for everyday wear.', theme: 'dark' },
+    bikini: { label: 'Bikini', eyebrow: 'Swimwear',  desc: 'Clean lines, soft coverage, and tonal pieces designed for motion.',        theme: 'light' }
+};
+
+function collectionMetaFor(type, items) {
+    return COLLECTION_META[type] || {
+        label: items[0]?.cat || type,
+        eyebrow: items[0]?.cat || 'Collection',
+        desc: `Explore ${items.length} curated piece(s) in this collection.`,
+        theme: 'dark'
+    };
+}
+
+function renderShopCollections() {
+    const grid = document.getElementById('shop-category-grid');
+    if (!grid) return;
+    const types = [...new Set(PRODUCTS.map(p => p.type))];
+    grid.innerHTML = types.map(type => {
+        const items = PRODUCTS.filter(p => p.type === type);
+        const meta = collectionMetaFor(type, items);
+        const isDark = meta.theme !== 'light';
+        const bg = isDark
+            ? 'linear-gradient(180deg, rgba(17,17,17,0.96), rgba(17,17,17,0.82))'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240,240,235,0.9))';
+        const color = isDark ? '#f0f0eb' : '#111';
+        const subColor = isDark ? 'rgba(240,240,235,.72)' : 'rgba(17,17,17,.68)';
+        const descColor = isDark ? 'rgba(240,240,235,.8)' : 'rgba(17,17,17,.78)';
+        return `<a href="shop.html?type=${encodeURIComponent(type)}" class="shop-category-card reveal" style="display:flex; flex-direction:column; justify-content:space-between; min-height: 270px; padding: 2rem; border-radius: 24px; background: ${bg}; color: ${color}; text-decoration: none; box-shadow: 0 24px 60px rgba(17,17,17,0.1);">
+            <span style="font-size: .72rem; letter-spacing: .38rem; text-transform: uppercase; color: ${subColor};">${meta.eyebrow}</span>
+            <div>
+                <h3 style="font-family: 'Bebas Neue', Arial, sans-serif; font-size: 3.1rem; letter-spacing: .2rem; margin: 0 0 .5rem;">${meta.label}</h3>
+                <p style="margin: 0; color: ${descColor}; line-height: 1.6;">${meta.desc}</p>
+                <p style="margin: .6rem 0 0; font-size:.72rem; letter-spacing:.15rem; text-transform:uppercase; color: ${descColor};">${items.length} item(s)</p>
+            </div>
+        </a>`;
+    }).join('');
+}
+
+function initShopCollections() {
     if (!document.body.classList.contains('shop-page')) return;
+    renderShopCollections();
+
+    const categoriesSection = document.getElementById('shop-categories-section');
+    const collectionSection = document.getElementById('shop-collection-section');
+    if (!categoriesSection || !collectionSection) return;
 
     const params = new URLSearchParams(window.location.search);
-    const type = (params.get('type') || '').toLowerCase();
-    const sectionId = type === 'cap' || type === 'caps'
-        ? 'caps'
-        : type === 'bikini' || type === 'bikinis'
-            ? 'bikinis'
-            : null;
+    const type = params.get('type');
+    const items = type ? PRODUCTS.filter(p => p.type === type) : [];
 
-    if (!sectionId) return;
-
-    const target = document.getElementById(sectionId);
-    if (!target) return;
-
-    setTimeout(() => {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
+    if (type && items.length) {
+        const meta = collectionMetaFor(type, items);
+        document.getElementById('collection-title').textContent = meta.label.toUpperCase();
+        document.getElementById('collection-eyebrow').textContent = meta.eyebrow;
+        document.getElementById('collection-grid').innerHTML = items.map(cardHTML).join('');
+        categoriesSection.style.display = 'none';
+        collectionSection.style.display = '';
+    } else {
+        categoriesSection.style.display = '';
+        collectionSection.style.display = 'none';
+    }
+    initReveal();
+    initCategoryNavigation();
 }
 
 /* ────────────────────────────────────────
@@ -946,5 +1017,5 @@ loadProductCatalog().finally(() => {
     toggleAdminLink();
     updateCustomerAuthLinks();
     setActiveNav();
-    routeShopCategory();
+    initShopCollections();
 });
