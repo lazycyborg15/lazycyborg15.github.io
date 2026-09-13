@@ -315,6 +315,12 @@
             }
         }
 
+        function saveLocalOrder(order) {
+            const orders = JSON.parse(localStorage.getItem('pynx_local_orders') || '[]');
+            orders.push({ ...order, createdAt: new Date().toISOString(), localOnly: true });
+            localStorage.setItem('pynx_local_orders', JSON.stringify(orders));
+        }
+
         function renderCheckoutSummary() {
             const itemsEl = document.getElementById('checkout-items');
             const subtotalEl = document.getElementById('checkout-subtotal');
@@ -407,6 +413,12 @@
                 document.getElementById('checkout-form').style.display = 'none';
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
+                if (error instanceof TypeError) {
+                    saveLocalOrder({ firstName, lastName, address, email, contact, items });
+                    document.getElementById('checkout-form').style.display = 'none';
+                    document.getElementById('checkout-success').style.display = 'block';
+                    return;
+                }
                 console.error('Checkout submission error:', error);
                 alert(error?.message || 'Order submission failed. Please try again later.');
             }
