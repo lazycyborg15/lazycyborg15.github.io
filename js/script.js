@@ -582,11 +582,13 @@ function removeSelectedCart() {
 function openCart() {
     document.getElementById('cart-drawer')?.classList.add('open');
     document.getElementById('overlay')?.classList.add('show');
+    sessionStorage.setItem('pynx_cart_open', 'true');
 }
 
 function closeCart() {
     document.getElementById('cart-drawer')?.classList.remove('open');
     document.getElementById('overlay')?.classList.remove('show');
+    sessionStorage.removeItem('pynx_cart_open');
 }
 
 function closeAll() {
@@ -1024,4 +1026,6 @@ loadProductCatalog().finally(() => {
     updateCustomerAuthLinks();
     setActiveNav();
     initShopCollections();
+    // Keep the cart drawer open across page navigations until the customer closes it.
+    if (sessionStorage.getItem('pynx_cart_open') === 'true') openCart();
 });

@@ -244,15 +244,6 @@
 
 <script src="js/script.js"></script>
 <script>
-    // Hide Login tab if admin is logged in
-    const adminToken = localStorage.getItem('pynx_admin_token');
-    if (adminToken) {
-        const loginLink = document.querySelector('a[href="login.html"]');
-        if (loginLink) {
-            loginLink.parentElement.style.display = 'none';
-        }
-    }
-    
     // Check if user is logged in, if not show error message
     if (!localStorage.getItem('pynx_logged_in')) {
         document.body.innerHTML = `

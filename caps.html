@@ -166,12 +166,5 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/script.js"></script>
-<script>
-    const adminToken = localStorage.getItem('pynx_admin_token');
-    if (adminToken) {
-        const loginLink = document.querySelector('a[href="login.html"]');
-        if (loginLink) loginLink.parentElement.style.display = 'none';
-    }
-</script>
 </body>
 </html>

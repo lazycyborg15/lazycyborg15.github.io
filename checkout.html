@@ -284,16 +284,6 @@
 
     <footer>
     <script>
-        // Hide Login tab if admin is logged in
-        const adminToken = localStorage.getItem('pynx_admin_token');
-        if (adminToken) {
-            const loginLink = document.querySelector('a[href="login.html"]');
-            if (loginLink) {
-                loginLink.parentElement.style.display = 'none';
-            }
-        }
-    </script>
-    <script>
         // Renamed to avoid clashing with the global API_BASE declared in js/script.js.
         const CHECKOUT_API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
             ? 'http://localhost:5000'
