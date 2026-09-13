@@ -304,6 +304,10 @@
             return `${API_BASE}${path}`;
         }
 
+        function isHostedStaticMode() {
+            return window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
+        }
+
         function getPersistedCart() {
             try {
                 const stored = localStorage.getItem('pynx_cart');
@@ -388,6 +392,13 @@
                 return;
             }
 
+            if (isHostedStaticMode()) {
+                saveLocalOrder({ firstName, lastName, address, email, contact, items });
+                document.getElementById('checkout-form').style.display = 'none';
+                document.getElementById('checkout-success').style.display = 'block';
+                return;
+            }
+
             try {
                 const response = await fetch(getApiUrl('/api/orders'), {
                     method: 'POST',
@@ -413,7 +424,7 @@
                 document.getElementById('checkout-form').style.display = 'none';
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
-                if (error instanceof TypeError) {
+                if (error instanceof TypeError || error.name === 'AbortError') {
                     saveLocalOrder({ firstName, lastName, address, email, contact, items });
                     document.getElementById('checkout-form').style.display = 'none';
                     document.getElementById('checkout-success').style.display = 'block';
