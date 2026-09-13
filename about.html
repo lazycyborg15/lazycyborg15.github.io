@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="about-page">
+<header id="site-header">
+    <a class="logo" href="index.html#home"><span class="header-logo-text">PYNX</span></a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home" class="nav-link">Home</a></li>
+                <li><a href="shop.html" class="nav-link">Shop</a></li>
+                <li><a href="about.html" class="nav-link active">About</a></li>
+                <li><a href="contact.html" class="nav-link">Contact Us</a></li>
+                <li><a href="login.html" class="nav-link">Login</a></li>
+                <li><a href="admin.html" class="nav-link admin-link">Admin</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <button class="menu-toggle" id="menu-toggle" onclick="toggleAboutMenu()" aria-label="Toggle menu" aria-expanded="false"><span></span><span></span><span></span></button>
+            <div class="menu-dropdown" id="menu-dropdown">
+                <a href="index.html#home" onclick="closeAboutMenu()">Home</a>
+                <a href="shop.html" onclick="closeAboutMenu()">Shop</a>
+                <a href="about.html" onclick="closeAboutMenu()">About</a>
+                <a href="contact.html" onclick="closeAboutMenu()">Contact Us</a>
+                <a href="login.html" onclick="closeAboutMenu()">Login</a>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main>
+    <section class="hero shop-hero about-hero">
+        <div class="hero-background"></div>
+        <div class="hero-content">
+            <p class="hero-eyebrow">THE PYNX POINT OF VIEW</p>
+            <div class="hero-center"><span class="hero-logo-text">ABOUT</span></div>
+            <p class="hero-sub">BOLD. MINIMAL. ICONIC.</p>
+        </div>
+    </section>
+
+    <section class="section section--white about-page-section">
+        <div class="section-header reveal">
+            <p class="section-eyebrow">The Brand</p>
+            <h1 class="section-title">MADE TO MOVE WITH YOU</h1>
+        </div>
+        <div class="about-page-grid">
+            <p class="reveal">PYNX is the fusion of bold minimalism and timeless design. We create premium headwear and swimwear for people who move through the world with quiet authority.</p>
+            <p class="reveal">Every silhouette is considered, every detail deliberate. Our pieces are designed to feel effortless, last beyond the season, and stand apart from the noise.</p>
+        </div>
+    </section>
+
+    <section class="section about-page-values">
+        <div class="section-header reveal">
+            <p class="section-eyebrow">Our Language</p>
+            <h2 class="section-title">SHADOW &amp; LIGHT</h2>
+        </div>
+        <div class="about-values-grid">
+            <div class="about-value reveal"><span>01</span><h3>INTENTIONAL</h3><p>Nothing is added without purpose. Clean lines leave room for character.</p></div>
+            <div class="about-value reveal"><span>02</span><h3>CONFIDENT</h3><p>Our pieces are quiet in form and unmistakable in presence.</p></div>
+            <div class="about-value reveal"><span>03</span><h3>ENDURING</h3><p>We design beyond the trend, building essentials worth returning to.</p></div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <div class="footer-grid">
+        <div class="footer-brand"><span class="footer-logo-text">PYNX</span><p>Premium headwear and swimwear for those who move with purpose. Designed to last. Built to stand out.</p></div>
+        <div class="footer-col"><h4>Explore</h4><a href="shop.html">Shop</a><a href="caps.html">Caps</a><a href="bikini.html">Bikini</a></div>
+        <div class="footer-col"><h4>Support</h4><a href="contact.html">Contact Us</a><a href="about.html">About PYNX</a></div>
+        <div class="footer-col"><h4>Stay Connected</h4><p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p><div class="social-icons"><a href="https://www.facebook.com/share/1Jty7igKV4/" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Facebook">f</a><a href="https://www.instagram.com/pynx.ph?stkn=MWkxbDRiOG84djZkdQ==" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram">◎</a><a href="https://www.tiktok.com/@pynx.ph?_r=1&_t=ZS-99gsWG2E6Ls" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="TikTok">♪</a></div></div>
+    </div>
+    <div class="footer-bottom"><p>© 2026 PYNX. All rights reserved.</p></div>
+</footer>
+<script>
+    function toggleAboutMenu() { const menu = document.getElementById('menu-dropdown'); const button = document.getElementById('menu-toggle'); const open = menu.classList.toggle('open'); button.setAttribute('aria-expanded', open); }
+    function closeAboutMenu() { document.getElementById('menu-dropdown').classList.remove('open'); document.getElementById('menu-toggle').setAttribute('aria-expanded', 'false'); }
+    const revealItems = document.querySelectorAll('.reveal');
+    const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); revealObserver.unobserve(entry.target); } }), { threshold: .12 });
+    revealItems.forEach(item => revealObserver.observe(item));
+</script>
+</body>
+</html>

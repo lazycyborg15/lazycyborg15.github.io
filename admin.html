@@ -10,16 +10,13 @@
 </head>
 <body class="admin-page">
 <header id="site-header">
-    <a class="logo" href="index.html#home">
+    <a class="logo" href="admin.html">
         <span class="header-logo-text">PYNX</span>
     </a>
     <div class="header-right">
         <nav>
             <ul id="nav-menu">
-                <li><a href="index.html#home" data-page="home" class="nav-link">Home</a></li>
-                <li><a href="shop.html" data-page="shop" class="nav-link">Shop</a></li>
-                <li><a href="contact.html" data-page="contact" class="nav-link">Contact Us</a></li>
-                <li><a href="admin.html" data-page="admin" class="nav-link active">Admin</a></li>
+                <li><a href="admin.html" data-page="admin" class="nav-link active">Staff Login</a></li>
             </ul>
         </nav>
     </div>
@@ -211,10 +208,65 @@
         adminDashboard.style.display = 'block';
     }
 
+    function loadLocalOrders() {
+        try {
+            const orders = JSON.parse(localStorage.getItem('pynx_local_orders') || '[]');
+            return Array.isArray(orders) ? orders : [];
+        } catch (error) {
+            console.error('Failed to parse local orders:', error);
+            return [];
+        }
+    }
+
+    function renderLocalOrders() {
+        const orders = loadLocalOrders().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const totals = orders.map(order => (order.items || []).reduce((sum, item) => sum + (Number(item.product?.price) || 0) * (Number(item.qty) || 0), 0));
+        const revenue = totals.reduce((sum, total) => sum + total, 0);
+
+        adminStatus.textContent = 'Showing orders saved on this device.';
+        adminStatus.classList.remove('error', 'loading');
+        orderCount.textContent = `${orders.length} order(s)`;
+        totalRevenue.textContent = `₱${revenue.toFixed(2)}`;
+        avgOrder.textContent = `₱${(orders.length ? revenue / orders.length : 0).toFixed(2)}`;
+        lastRefresh.textContent = 'Local mode';
+
+        ordersList.innerHTML = orders.length ? orders.map((order, index) => {
+            const items = (order.items || []).map(item => {
+                const name = item.product?.name || 'Item';
+                const qty = Number(item.qty) || 1;
+                const size = item.size ? ` (${item.size})` : '';
+                const price = (Number(item.product?.price) || 0).toFixed(2);
+                return `<li class="item-chip"><span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
+            }).join('');
+            const total = totals[index] || 0;
+            return `<div class="order-card">
+                <div class="order-card-header"><span class="order-number">Local Order #${index + 1}</span><span class="order-total-badge">₱${total.toFixed(2)}</span></div>
+                <div class="order-card-body">
+                    <div class="order-info-section">
+                        <div class="order-info-row"><label>Name:</label><span>${order.firstName || ''} ${order.lastName || ''}</span></div>
+                        <div class="order-info-row"><label>Email:</label><span>${order.email || '—'}</span></div>
+                        <div class="order-info-row"><label>Phone:</label><span>${order.contact || '—'}</span></div>
+                        <div class="order-info-row"><label>Address:</label><span>${order.address || '—'}</span></div>
+                    </div>
+                    <div class="order-divider"></div>
+                    <div class="order-items-section"><label class="items-label">Items:</label><ul class="order-items">${items || '<li class="empty-state">No items</li>'}</ul></div>
+                    <div class="order-divider"></div>
+                    <div class="order-footer-section"><div class="order-info-row"><label>Created:</label><span>${new Date(order.createdAt).toLocaleString()}</span></div></div>
+                </div>
+            </div>`;
+        }).join('') : '<div class="empty-state-card">No local orders have been submitted yet.</div>';
+        showDashboard();
+    }
+
     async function fetchOrders() {
         const token = getToken();
         if (!token) {
             showLogin();
+            return;
+        }
+
+        if (token === 'local-admin-session') {
+            renderLocalOrders();
             return;
         }
 
@@ -644,6 +696,17 @@
         }
 
         try {
+            if (isHostedStaticMode()) {
+                if (email !== 'admin@pynx.com' || password !== 'PYNX2026!') {
+                    throw new Error('Use the hosted demo admin credentials: admin@pynx.com / PYNX2026!');
+                }
+                localStorage.setItem('pynx_admin_token', 'local-admin-session');
+                adminNote.textContent = 'Local admin mode. Start the API server to save changes and load orders.';
+                adminNote.classList.remove('error');
+                showDashboard();
+                return;
+            }
+
             const response = await fetch(getApiUrl('/api/admin/login'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -677,6 +740,8 @@
 
     adminLogout.addEventListener('click', function() {
         localStorage.removeItem('pynx_admin_token');
+        localStorage.removeItem('pynx_admin_email');
+        sessionStorage.removeItem('pynx_admin_token');
         showLogin();
     });
 
@@ -696,7 +761,11 @@
         }
     });
 
-    fetchOrders();
+    if (getToken()) {
+        fetchOrders();
+    } else {
+        showLogin();
+    }
 </script>
 <footer>
     <div class="footer-bottom">
