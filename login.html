@@ -93,18 +93,19 @@
             loginNote.classList.remove('error');
             setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
         } catch (error) {
+            const account = findLocalAccount(email, password);
+            if (account) {
+                localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined, signedInAt: new Date().toISOString() }));
+                localStorage.setItem('pynx_logged_in', 'true');
+                localStorage.setItem('pynx_customer_token', 'local-session');
+                localStorage.removeItem('pynx_admin_token');
+                loginNote.textContent = 'Signed in on this device. Redirecting...';
+                loginNote.classList.remove('error');
+                setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
+                return;
+            }
+
             if (error instanceof TypeError) {
-                const account = findLocalAccount(email, password);
-                if (account) {
-                    localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined, signedInAt: new Date().toISOString() }));
-                    localStorage.setItem('pynx_logged_in', 'true');
-                    localStorage.setItem('pynx_customer_token', 'local-session');
-                    localStorage.removeItem('pynx_admin_token');
-                    loginNote.textContent = 'Signed in on this device. Redirecting...';
-                    loginNote.classList.remove('error');
-                    setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
-                    return;
-                }
                 loginNote.textContent = 'No local account matched. Start the server or create an account on this device.';
             } else {
                 loginNote.textContent = error.message || 'Invalid customer email or password.';

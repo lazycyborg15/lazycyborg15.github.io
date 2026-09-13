@@ -95,6 +95,13 @@
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.message || 'Unable to create account.');
 
+            // Keep a local backup so this device can still sign the customer in if the backend later becomes unreachable.
+            try {
+                saveLocalAccount({ id: result.customer.id, firstName, lastName, email: email.toLowerCase(), password, createdAt: new Date().toISOString() });
+            } catch (backupError) {
+                console.warn('Local account backup skipped:', backupError.message);
+            }
+
             localStorage.setItem('pynx_user', JSON.stringify(result.customer));
             localStorage.setItem('pynx_logged_in', 'true');
             localStorage.setItem('pynx_customer_token', result.token || '');
