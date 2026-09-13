@@ -60,6 +60,15 @@
         : '';
     const returnPage = new URLSearchParams(window.location.search).get('return');
 
+    function saveLocalAccount(account) {
+        const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
+        if (accounts.some(saved => saved.email.toLowerCase() === account.email.toLowerCase())) {
+            throw new Error('An account with this email already exists.');
+        }
+        accounts.push(account);
+        localStorage.setItem('pynx_local_accounts', JSON.stringify(accounts));
+    }
+
     signupForm.addEventListener('submit', async function(event) {
         event.preventDefault();
         const firstName = document.getElementById('signup-first-name').value.trim();
@@ -96,8 +105,33 @@
                 window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html';
             }, 800);
         } catch (error) {
-            signupNote.textContent = error.message || 'Unable to create account.';
-            signupNote.classList.add('error');
+            if (error instanceof TypeError) {
+                try {
+                    const account = {
+                        id: `local-${Date.now()}`,
+                        firstName,
+                        lastName,
+                        email: email.toLowerCase(),
+                        password,
+                        createdAt: new Date().toISOString()
+                    };
+                    saveLocalAccount(account);
+                    localStorage.setItem('pynx_user', JSON.stringify(account));
+                    localStorage.setItem('pynx_logged_in', 'true');
+                    localStorage.setItem('pynx_customer_token', 'local-session');
+                    signupNote.textContent = 'Account created on this device. Redirecting...';
+                    signupNote.classList.remove('error');
+                    setTimeout(() => {
+                        window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html';
+                    }, 800);
+                } catch (localError) {
+                    signupNote.textContent = localError.message || 'Unable to create account.';
+                    signupNote.classList.add('error');
+                }
+            } else {
+                signupNote.textContent = error.message || 'Unable to create account.';
+                signupNote.classList.add('error');
+            }
         }
     });
 

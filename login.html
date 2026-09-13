@@ -59,6 +59,11 @@
         createAccountLink.href = 'signup.html?return=checkout.html';
     }
 
+    function findLocalAccount(email, password) {
+        const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
+        return accounts.find(account => account.email.toLowerCase() === email.toLowerCase() && account.password === password);
+    }
+
     loginForm.addEventListener('submit', async function(event) {
         event.preventDefault();
         const email = document.getElementById('login-email').value.trim();
@@ -88,9 +93,22 @@
             loginNote.classList.remove('error');
             setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
         } catch (error) {
-            loginNote.textContent = error instanceof TypeError
-                ? 'The login server is unavailable. Please start PYNX with start_server.bat or start_server.ps1 and try again.'
-                : (error.message || 'Invalid customer email or password.');
+            if (error instanceof TypeError) {
+                const account = findLocalAccount(email, password);
+                if (account) {
+                    localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined, signedInAt: new Date().toISOString() }));
+                    localStorage.setItem('pynx_logged_in', 'true');
+                    localStorage.setItem('pynx_customer_token', 'local-session');
+                    localStorage.removeItem('pynx_admin_token');
+                    loginNote.textContent = 'Signed in on this device. Redirecting...';
+                    loginNote.classList.remove('error');
+                    setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
+                    return;
+                }
+                loginNote.textContent = 'No local account matched. Start the server or create an account on this device.';
+            } else {
+                loginNote.textContent = error.message || 'Invalid customer email or password.';
+            }
             loginNote.classList.add('error');
         }
     });
