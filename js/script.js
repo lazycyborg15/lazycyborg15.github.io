@@ -1008,6 +1008,9 @@ function initShopCollections() {
 ──────────────────────────────────────── */
 cart = loadCart();
 wishlist = loadWishlist();
+toggleAdminLink();
+updateCustomerAuthLinks();
+setActiveNav();
 loadProductCatalog().finally(() => {
     renderProducts();
     updateCartUI();

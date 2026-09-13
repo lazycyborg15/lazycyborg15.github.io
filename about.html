@@ -19,7 +19,6 @@
                 <li><a href="about.html" class="nav-link active">About</a></li>
                 <li><a href="contact.html" class="nav-link">Contact Us</a></li>
                 <li><a href="login.html" class="nav-link">Login</a></li>
-                <li><a href="admin.html" class="nav-link admin-link">Admin</a></li>
             </ul>
         </nav>
         <div class="header-actions">
@@ -84,6 +83,24 @@
     const revealItems = document.querySelectorAll('.reveal');
     const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); revealObserver.unobserve(entry.target); } }), { threshold: .12 });
     revealItems.forEach(item => revealObserver.observe(item));
+
+    // Toggle the Login link to Logout whenever a customer session is active.
+    (function updateCustomerAuthLinks() {
+        const isLoggedIn = localStorage.getItem('pynx_logged_in') === 'true';
+        document.querySelectorAll('a[href="login.html"]').forEach(link => {
+            link.textContent = isLoggedIn ? 'Logout' : 'Login';
+            link.setAttribute('aria-label', isLoggedIn ? 'Log out of your customer account' : 'Log in to your customer account');
+            if (isLoggedIn) {
+                link.onclick = function(event) {
+                    event.preventDefault();
+                    localStorage.removeItem('pynx_logged_in');
+                    localStorage.removeItem('pynx_user');
+                    localStorage.removeItem('pynx_customer_token');
+                    window.location.href = 'login.html';
+                };
+            }
+        });
+    })();
 </script>
 </body>
 </html>
