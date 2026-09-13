@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up | PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header id="site-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home">Home</a></li>
+                <li><a href="contact.html">Contact Us</a></li>
+                <li><a href="admin.html" class="admin-link">Admin</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+<main class="page-auth">
+    <section class="auth-panel">
+        <div class="auth-inner">
+            <div class="section-header">
+                <p class="section-eyebrow">Create Your Account</p>
+                <h1>Sign up for PYNX</h1>
+                <p class="page-sub">Enter your details below to get started.</p>
+            </div>
+            <form class="auth-form" id="signup-form">
+                <label for="signup-first-name">First Name</label>
+                <input type="text" id="signup-first-name" placeholder="First name" required>
+                <label for="signup-last-name">Last Name</label>
+                <input type="text" id="signup-last-name" placeholder="Last name" required>
+                <label for="signup-email">Email</label>
+                <input type="email" id="signup-email" placeholder="you@example.com" required>
+                <label for="signup-password">Password (6 or more characters)</label>
+                <input type="password" id="signup-password" placeholder="Enter a password" minlength="6" required>
+                <p class="auth-note" id="signup-note">Create an account to continue shopping.</p>
+                <div class="form-buttons">
+                    <button type="submit" class="btn-primary form-submit">Sign Up</button>
+                    <a href="login.html" class="btn-back">Back</a>
+                </div>
+            </form>
+            <p class="auth-switch">Need help or questions? <a href="contact.html">Contact Us</a></p>
+        </div>
+    </section>
+</main>
+<script src="js/admin-link.js"></script>
+<script>
+    const signupForm = document.getElementById('signup-form');
+    const signupNote = document.getElementById('signup-note');
+
+    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+        ? 'http://localhost:5000'
+        : '';
+    const returnPage = new URLSearchParams(window.location.search).get('return');
+
+    signupForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const firstName = document.getElementById('signup-first-name').value.trim();
+        const lastName = document.getElementById('signup-last-name').value.trim();
+        const email = document.getElementById('signup-email').value.trim();
+        const password = document.getElementById('signup-password').value;
+
+        if (!firstName || !lastName || !email || !password) {
+            signupNote.textContent = 'Please fill in all required fields.';
+            signupNote.classList.add('error');
+            return;
+        }
+        if (password.length < 6) {
+            signupNote.textContent = 'Password must be at least 6 characters.';
+            signupNote.classList.add('error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/api/customers/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ firstName, lastName, email, password })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Unable to create account.');
+
+            localStorage.setItem('pynx_user', JSON.stringify(result.customer));
+            localStorage.setItem('pynx_logged_in', 'true');
+            localStorage.setItem('pynx_customer_token', result.token || '');
+            signupNote.textContent = 'Account created successfully. Redirecting...';
+            signupNote.classList.remove('error');
+            setTimeout(() => {
+                window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html';
+            }, 800);
+        } catch (error) {
+            signupNote.textContent = error.message || 'Unable to create account.';
+            signupNote.classList.add('error');
+        }
+    });
+
+    signupForm.addEventListener('input', function() {
+        signupNote.textContent = 'Create an account to continue shopping.';
+        signupNote.classList.remove('error');
+    });
+
+    // Prevent access to home page if not logged in
+    const homeLink = document.querySelector('a[href*="index.html"]');
+    if (homeLink) {
+        homeLink.addEventListener('click', function(e) {
+            // Always prevent navigation on signup page - user must sign up first
+            e.preventDefault();
+            alert('Please sign up first to access the home page.');
+        });
+        homeLink.style.cursor = 'not-allowed';
+        homeLink.style.opacity = '0.5';
+    }
+</script>
+<footer>
+    <div class="footer-bottom">
+        <p>© 2026 PYNX. All rights reserved.</p>
+    </div>
+</footer>
+</body>
+</html>

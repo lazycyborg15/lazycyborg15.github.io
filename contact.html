@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us | PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="contact-page">
+<header id="site-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home" data-page="home" class="nav-link">Home</a></li>
+                <li><a href="shop.html" data-page="shop" class="nav-link">Shop</a></li>
+                <li><a href="index.html#about" data-page="about" class="nav-link">About</a></li>
+                <li><a href="contact.html" data-page="contact" class="nav-link">Contact Us</a></li>
+                <li><a href="login.html" data-page="login" class="nav-link">Login</a></li>
+                <li><a href="admin.html" data-page="admin" class="nav-link admin-link">Admin</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <button class="wishlist-header-btn" onclick="openWishlist()" aria-label="Open wishlist">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+                <span class="wishlist-badge" id="wishlist-badge">0</span>
+            </button>
+            <button class="cart-btn" onclick="openCart()" aria-label="Open cart">
+                <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+                <span class="cart-badge" id="cart-badge">0</span>
+            </button>
+            <button class="menu-toggle" id="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="menu-dropdown" id="menu-dropdown">
+                <a href="index.html#home" onclick="closeMenuDropdown()">Home</a>
+                <a href="shop.html" onclick="closeMenuDropdown()">Shop</a>
+                <a href="index.html#about" onclick="closeMenuDropdown()">About</a>
+                <a href="contact.html" onclick="closeMenuDropdown()">Contact Us</a>
+                <a href="admin.html" class="admin-link" onclick="closeMenuDropdown()">Admin</a>
+            </div>
+        </div>
+    </div>
+</header>
+<main class="page-contact">
+    <section class="contact-hero">
+        <div class="page-header">
+            <h1>Reach Out to Us</h1>
+            <p class="page-sub">Prefer to reach us directly? Write to us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a></p>
+        </div>
+    </section>
+    <section class="contact-panel">
+        <form class="contact-inner" id="contact-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="f-first">Name</label>
+                    <input type="text" id="f-first" name="name" placeholder="Your name">
+                </div>
+                <div class="form-group">
+                    <label for="f-email">Email</label>
+                    <input type="email" id="f-email" name="email" placeholder="you@example.com">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="f-phone">Phone Number</label>
+                <input type="tel" id="f-phone" name="phone" placeholder="123-456-7890">
+            </div>
+            <div class="form-group">
+                <label for="f-message">Comment</label>
+                <textarea id="f-message" name="message" placeholder="How can we help?"></textarea>
+            </div>
+            <button type="submit" class="btn-primary form-submit">Send</button>
+            <div class="form-success" id="form-success">
+                <div class="check">✓</div>
+                <p>Message sent — we’ll reply within 1–2 business days.</p>
+            </div>
+        </form>
+    </section>
+</main>
+    <script src="js/script.js"></script>
+    <script>
+        // Hide Login tab if admin is logged in
+        const adminToken = localStorage.getItem('pynx_admin_token');
+        if (adminToken) {
+            const loginLink = document.querySelector('a[href="login.html"]');
+            if (loginLink) {
+                loginLink.parentElement.style.display = 'none';
+            }
+        }
+    </script>
+    <script>
+        const CONTACT_API_BASE = window.location.protocol === 'file:' ? 'http://localhost:5000' : '';
+        const contactForm = document.getElementById('contact-form');
+        const formSuccess = document.getElementById('form-success');
+
+        function loadLocalContacts() {
+            try {
+                const stored = localStorage.getItem('pynx_contacts');
+                if (!stored) return [];
+                return JSON.parse(stored);
+            } catch (err) {
+                console.error('Failed to parse local contacts:', err);
+                return [];
+            }
+        }
+
+        function saveLocalContacts(contacts) {
+            try {
+                localStorage.setItem('pynx_contacts', JSON.stringify(contacts));
+            } catch (err) {
+                console.error('Failed to save local contacts:', err);
+            }
+        }
+
+        function storeContactLocally(entry) {
+            const contacts = loadLocalContacts();
+            contacts.push(entry);
+            saveLocalContacts(contacts);
+        }
+
+        function bindContactForm() {
+            const contactForm = document.getElementById('contact-form');
+            if (!contactForm) {
+                console.error('Contact form not found');
+                return;
+            }
+            contactForm.addEventListener('submit', handleContactSubmit);
+            console.log('Contact form submit listener attached');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindContactForm);
+        } else {
+            bindContactForm();
+        }
+
+        async function handleContactSubmit(event) {
+            event.preventDefault();
+            const first = document.getElementById('f-first').value.trim();
+            const email = document.getElementById('f-email').value.trim();
+            const phone = document.getElementById('f-phone').value.trim();
+            const message = document.getElementById('f-message').value.trim();
+            if (!first || !email || !message) { showToast('Please fill in all required fields'); return; }
+            if (!email.includes('@')) { showToast('Please enter a valid email address'); return; }
+
+            const contactEntry = {
+                name: first,
+                email,
+                phone,
+                message,
+                createdAt: new Date().toISOString(),
+            };
+
+            let backendSuccess = false;
+            try {
+                const response = await fetch(`${CONTACT_API_BASE}/api/contact`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: first, email, phone, message }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to submit your message.');
+                }
+                backendSuccess = true;
+            } catch (err) {
+                console.error('Contact submit failed:', err);
+                showToast('Message saved locally. It will appear in admin view when backend is available.');
+            }
+
+            storeContactLocally(contactEntry);
+            contactForm.style.display = 'none';
+            formSuccess.style.display = 'block';
+        }
+    </script>
+    <script src="js/admin-link.js"></script>
+    <div class="toast" id="toast"></div>
+<footer>
+    <div class="footer-grid">
+        <div class="footer-brand">
+            <span class="footer-logo-text">PYNX</span>
+            <p>Premium headwear and swimwear for those who move with purpose. Designed to last. Built to stand out.</p>
+        </div>
+        <div class="footer-col">
+            <h4>Shop</h4>
+            <a href="shop.html#caps">Caps</a>
+            <a href="shop.html#bikinis">Bikinis</a>
+            <a href="shop.html#caps">New Arrivals</a>
+            <a href="shop.html#caps">Sale</a>
+        </div>
+        <div class="footer-col">
+            <h4>Support</h4>
+            <a href="contact.html">Contact Us</a>
+            <a href="index.html#contact">FAQ</a>
+        </div>
+        <div class="footer-col">
+            <h4>Stay Connected</h4>
+            <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p>
+            <div class="nl-form">
+                <input type="email" id="nl-email" placeholder="Your email">
+                <button onclick="subscribeNewsletter()">→</button>
+            </div>
+            <div class="social-icons">
+                <a href="https://www.instagram.com/pynx_official26?igsh=MWkxbDRiOG84djZkdQ==" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
+                    <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                        <rect x="6" y="6" width="20" height="20" rx="6" stroke="white" stroke-width="2" fill="none"/>
+                        <circle cx="16" cy="16" r="5" stroke="white" stroke-width="2" fill="none"/>
+                        <circle cx="22.2" cy="9.8" r="1.3" fill="white"/>
+                    </svg>
+                </a>
+                <a href="#" class="social-link" aria-label="Facebook">
+                    <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                        <path d="M18.5 7H20.5V10H18.5C17.948 10 17.5 10.448 17.5 11V13H20.5L20 16H17.5V25H14.5V16H12V13H14.5V11C14.5 8.791 16.291 7 18.5 7Z" fill="white"/>
+                    </svg>
+                </a>
+                <a href="https://www.tiktok.com/@pynx_official26?_r=1&_t=ZS-97Fcah0WyhM" class="social-link" aria-label="TikTok" target="_blank" rel="noopener noreferrer">
+                    <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                        <path d="M22 8c.667 1.333 2 2 4 2v3c-1.333 0 -2.667-.333-4-1v7a7 7 0 1 1-5-6.708V16a3 3 0 1 0 3 3V8h2z" fill="white"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <p>© 2026 PYNX. All rights reserved.</p>
+        <div class="footer-bottom-links">
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
+            <a href="#">Cookie Settings</a>
+        </div>
+    </div>
+</footer>
+
+<div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+<aside class="cart-drawer" id="cart-drawer">
+    <div class="drawer-header">
+        <span class="drawer-title">Your Cart</span>
+        <button class="drawer-close" onclick="closeCart()">×</button>
+    </div>
+    <div class="cart-items-list" id="cart-items-list">
+        <div class="cart-empty-msg" id="cart-empty">
+            <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            Your bag is empty
+        </div>
+    </div>
+    <div class="cart-footer">
+        <div class="cart-subtotal">
+            <span>Subtotal</span>
+            <span id="cart-total">₱0.00</span>
+        </div>
+        <p class="cart-note">Shipping & taxes calculated at checkout</p>
+        <button class="btn-primary checkout-btn" onclick="checkout()">Checkout</button>
+    </div>
+</aside>
+
+<aside class="cart-drawer wishlist-drawer" id="wishlist-drawer">
+    <div class="drawer-header">
+        <span class="drawer-title">Your Wishlist</span>
+        <button class="drawer-close" onclick="closeWishlist()">×</button>
+    </div>
+    <div class="cart-items-list" id="wishlist-items-list">
+        <div class="cart-empty-msg" id="wishlist-empty">
+            <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+            Your wishlist is empty
+        </div>
+    </div>
+

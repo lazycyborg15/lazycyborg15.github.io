@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PYNX Checkout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header id="site-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home" data-page="home" class="nav-link">Home</a></li>
+                <li><a href="index.html#about" data-page="about" class="nav-link">About</a></li>
+                <li><a href="contact.html" data-page="contact" class="nav-link">Contact Us</a></li>
+                <li><a href="login.html" id="checkout-auth-link" data-page="login" class="nav-link">Login</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <button class="wishlist-header-btn" onclick="openWishlist()" aria-label="Open wishlist">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+                <span class="wishlist-badge" id="wishlist-badge">0</span>
+            </button>
+            <button class="cart-btn" onclick="openCart()" aria-label="Open cart">
+                <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+                <span class="cart-badge" id="cart-badge">0</span>
+            </button>
+            <button class="menu-toggle" id="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="menu-dropdown" id="menu-dropdown">
+                <a href="index.html#home" onclick="closeMenuDropdown()">Home</a>
+                <a href="index.html#about" onclick="closeMenuDropdown()">About</a>
+                <a href="contact.html" onclick="closeMenuDropdown()">Contact Us</a>
+                <a href="login.html" id="checkout-mobile-auth-link" onclick="closeMenuDropdown()">Login</a>
+            </div>
+        </div>
+    </div>
+</header>
+<section class="section" style="padding-top: 120px;">
+        <div class="section-header reveal checkout-intro">
+            <p class="section-eyebrow">One Last Detail</p>
+            <h2 class="section-title">Make It Yours</h2>
+            <p class="checkout-intro-copy">Enter your details to check out your selected PYNX pieces.</p>
+        </div>
+        <div class="contact-inner checkout-layout">
+            <aside class="checkout-summary" aria-labelledby="checkout-summary-title">
+                <div class="checkout-summary-header">
+                    <p class="section-eyebrow">Your Order</p>
+                    <h3 id="checkout-summary-title">Items in Your Bag</h3>
+                </div>
+                <div id="checkout-items" class="checkout-items">
+                    <p class="checkout-empty">Your bag is empty.</p>
+                </div>
+                <div class="checkout-summary-total">
+                    <span>Subtotal</span>
+                    <strong id="checkout-subtotal">₱0.00</strong>
+                </div>
+            </aside>
+            <form id="checkout-form" class="checkout-form">
+                <div class="form-group">
+                    <label for="checkout-first-name">FIRST NAME:</label>
+                    <input type="text" id="checkout-first-name" placeholder="Jane" required>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-last-name">LAST NAME:</label>
+                    <input type="text" id="checkout-last-name" placeholder="Doe" required>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-contact">CONTACT NO:</label>
+                    <input type="tel" id="checkout-contact" placeholder="123-456-7890" required>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-address">ADDRESS:</label>
+                    <input type="text" id="checkout-address" placeholder="123 Main Street" required>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-email">EMAIL ADDRESS:</label>
+                    <input type="email" id="checkout-email" placeholder="jane@example.com" required>
+                </div>
+                <button class="btn-primary form-submit" type="submit">Submit Order</button>
+            </form>
+            <div class="form-success" id="checkout-success" style="display:none;">
+                <div class="check">✓</div>
+                <p>Thanks for your order. We will email you a confirmation shortly.</p>
+                <p>If you need help, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a>.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Login/Signup Modal -->
+    <div class="auth-modal" id="auth-modal" style="display: none;">
+        <div class="auth-modal-content">
+            <div class="auth-modal-close" onclick="closeAuthModal()">×</div>
+            
+            <!-- Login Tab -->
+            <div id="login-tab-content" class="auth-tab-content" style="display: block;">
+                <div class="section-header">
+                    <p class="section-eyebrow">Welcome back</p>
+                    <h2>Login to PYNX</h2>
+                    <p class="page-sub">Log in to proceed with checkout.</p>
+                </div>
+                <form id="modal-login-form" class="auth-form">
+                    <label for="modal-login-email">Email</label>
+                    <input id="modal-login-email" type="email" placeholder="you@example.com" required>
+                    <label for="modal-login-password">Password</label>
+                    <input id="modal-login-password" type="password" placeholder="Enter your password" required>
+                    <p class="auth-note" id="modal-login-note">Log in to continue.</p>
+                    <button type="submit" class="btn-primary form-submit">Log In</button>
+                </form>
+                <p class="auth-switch">Don't have an account? <a href="#" onclick="switchToSignup(event)">Sign up</a></p>
+            </div>
+
+            <!-- Signup Tab -->
+            <div id="signup-tab-content" class="auth-tab-content" style="display: none;">
+                <div class="section-header">
+                    <p class="section-eyebrow">Join PYNX</p>
+                    <h2>Create an Account</h2>
+                    <p class="page-sub">Sign up to proceed with checkout.</p>
+                </div>
+                <form id="modal-signup-form" class="auth-form">
+                    <label for="modal-signup-first-name">First Name</label>
+                    <input id="modal-signup-first-name" type="text" placeholder="Jane" required>
+                    <label for="modal-signup-last-name">Last Name</label>
+                    <input id="modal-signup-last-name" type="text" placeholder="Doe" required>
+                    <label for="modal-signup-email">Email</label>
+                    <input id="modal-signup-email" type="email" placeholder="you@example.com" required>
+                    <label for="modal-signup-password">Password</label>
+                    <input id="modal-signup-password" type="password" placeholder="At least 6 characters" required>
+                    <p class="auth-note" id="modal-signup-note">Create an account to continue.</p>
+                    <button type="submit" class="btn-primary form-submit">Sign Up</button>
+                </form>
+                <p class="auth-switch">Already have an account? <a href="#" onclick="switchToLogin(event)">Log in</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if user is logged in on page load
+        function checkCheckoutAuth() {
+            if (!localStorage.getItem('pynx_logged_in')) {
+                const modal = document.getElementById('auth-modal');
+                modal.style.display = 'flex';
+                modal.style.overflow = 'auto';
+                // Disable body scroll, but allow modal content to scroll
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function logoutFromCheckout(event) {
+            event.preventDefault();
+            localStorage.removeItem('pynx_logged_in');
+            localStorage.removeItem('pynx_user');
+            localStorage.removeItem('pynx_customer_token');
+            window.location.href = 'login.html';
+        }
+
+        function updateCheckoutAuthLinks() {
+            const isLoggedIn = localStorage.getItem('pynx_logged_in') === 'true';
+            const links = [
+                document.getElementById('checkout-auth-link'),
+                document.getElementById('checkout-mobile-auth-link'),
+                document.getElementById('checkout-footer-auth-link')
+            ];
+
+            links.forEach(link => {
+                if (!link) return;
+                link.textContent = isLoggedIn ? 'Logout' : 'Login';
+                link.href = isLoggedIn ? 'login.html' : 'login.html';
+                if (isLoggedIn) link.onclick = logoutFromCheckout;
+            });
+        }
+
+        function switchToSignup(e) {
+            e.preventDefault();
+            document.getElementById('login-tab-content').style.display = 'none';
+            document.getElementById('signup-tab-content').style.display = 'block';
+        }
+
+        function switchToLogin(e) {
+            e.preventDefault();
+            document.getElementById('signup-tab-content').style.display = 'none';
+            document.getElementById('login-tab-content').style.display = 'block';
+        }
+
+        // Modal Login Form Handler
+        document.getElementById('modal-login-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const email = document.getElementById('modal-login-email').value.trim();
+            const password = document.getElementById('modal-login-password').value;
+            const loginNote = document.getElementById('modal-login-note');
+
+            if (!email || !password) {
+                loginNote.textContent = 'Please enter both email and password.';
+                loginNote.classList.add('error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/customers/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Invalid customer email or password.');
+
+                localStorage.setItem('pynx_user', JSON.stringify(result.customer));
+                localStorage.setItem('pynx_logged_in', 'true');
+                localStorage.setItem('pynx_customer_token', result.token || '');
+                loginNote.textContent = 'Logged in. Closing...';
+                loginNote.classList.remove('error');
+                setTimeout(() => {
+                    closeAuthModal();
+                    this.reset();
+                    updateCheckoutAuthLinks();
+                }, 500);
+            } catch (error) {
+                loginNote.textContent = error.message || 'Invalid customer email or password.';
+                loginNote.classList.add('error');
+            }
+        });
+
+        // Modal Signup Form Handler
+        document.getElementById('modal-signup-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const firstName = document.getElementById('modal-signup-first-name').value.trim();
+            const lastName = document.getElementById('modal-signup-last-name').value.trim();
+            const email = document.getElementById('modal-signup-email').value.trim();
+            const password = document.getElementById('modal-signup-password').value;
+            const signupNote = document.getElementById('modal-signup-note');
+
+            if (!firstName || !lastName || !email || !password) {
+                signupNote.textContent = 'Please fill in all required fields.';
+                signupNote.classList.add('error');
+                return;
+            }
+            if (password.length < 6) {
+                signupNote.textContent = 'Password must be at least 6 characters.';
+                signupNote.classList.add('error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/customers/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName, email, password })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Unable to create account.');
+
+                localStorage.setItem('pynx_user', JSON.stringify(result.customer));
+                localStorage.setItem('pynx_logged_in', 'true');
+                localStorage.setItem('pynx_customer_token', result.token || '');
+                signupNote.textContent = 'Account created. Closing...';
+                signupNote.classList.remove('error');
+                setTimeout(() => {
+                    closeAuthModal();
+                    this.reset();
+                    updateCheckoutAuthLinks();
+                }, 500);
+            } catch (error) {
+                signupNote.textContent = error.message || 'Unable to create account.';
+                signupNote.classList.add('error');
+            }
+        });
+
+        // Check auth on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkCheckoutAuth();
+            updateCheckoutAuthLinks();
+        });
+    </script>
+
+    <footer>
+    <script>
+        // Hide Login tab if admin is logged in
+        const adminToken = localStorage.getItem('pynx_admin_token');
+        if (adminToken) {
+            const loginLink = document.querySelector('a[href="login.html"]');
+            if (loginLink) {
+                loginLink.parentElement.style.display = 'none';
+            }
+        }
+    </script>
+    <script>
+        const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+            ? 'http://localhost:5000'
+            : '';
+
+        function getApiUrl(path) {
+            return `${API_BASE}${path}`;
+        }
+
+        function getPersistedCart() {
+            try {
+                const stored = localStorage.getItem('pynx_cart');
+                if (!stored) return [];
+                return JSON.parse(stored);
+            } catch (err) {
+                console.error('Failed to parse persisted cart:', err);
+                return [];
+            }
+        }
+
+        function renderCheckoutSummary() {
+            const itemsEl = document.getElementById('checkout-items');
+            const subtotalEl = document.getElementById('checkout-subtotal');
+            const cartItems = getPersistedCart();
+
+            if (!cartItems.length) {
+                itemsEl.innerHTML = '<p class="checkout-empty">Your bag is empty.</p>';
+                subtotalEl.textContent = '₱0.00';
+                return;
+            }
+
+            let subtotal = 0;
+            itemsEl.innerHTML = cartItems.map(item => {
+                const price = Number(item.product?.price) || 0;
+                const quantity = Number(item.qty) || 0;
+                const lineTotal = price * quantity;
+                subtotal += lineTotal;
+                const size = item.size ? ` <span class="checkout-item-size">(${item.size})</span>` : '';
+
+                return `
+                    <div class="checkout-item">
+                        <div class="checkout-item-thumb" style="background:${item.product?.bg || '#f0f0eb'}20;" role="img" aria-label="${item.product?.name || 'Product'}">
+                            ${item.product?.emoji || ''}
+                        </div>
+                        <div class="checkout-item-details">
+                            <strong>${item.product?.name || 'Product'}</strong>${size}
+                            <span class="checkout-item-quantity">Qty: ${quantity}</span>
+                        </div>
+                        <span class="checkout-item-price">₱${lineTotal.toFixed(2)}</span>
+                    </div>`;
+            }).join('');
+
+            subtotalEl.textContent = `₱${subtotal.toFixed(2)}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', renderCheckoutSummary);
+
+        document.getElementById('checkout-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const firstName = document.getElementById('checkout-first-name').value.trim();
+            const lastName = document.getElementById('checkout-last-name').value.trim();
+            const address = document.getElementById('checkout-address').value.trim();
+            const email = document.getElementById('checkout-email').value.trim();
+            const contact = document.getElementById('checkout-contact').value.trim();
+            const persistedCart = getPersistedCart();
+            const cartItems = Array.isArray(window.cart) && window.cart.length ? window.cart : persistedCart;
+            const items = cartItems.map(item => ({
+                product: {
+                    id: item.product?.id,
+                    name: item.product?.name,
+                    price: item.product?.price,
+                    originalPrice: item.product?.originalPrice || item.product?.price,
+                    onSale: Boolean(item.product?.onSale),
+                },
+                qty: item.qty,
+                size: item.size || '',
+            }));
+
+            if (!firstName || !lastName || !address || !email || !contact) {
+                alert('Please complete all fields.');
+                return;
+            }
+            if (!email.includes('@')) {
+                alert('Please enter a valid email address.');
+                return;
+            }
+
+            try {
+                const response = await fetch(getApiUrl('/api/orders'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName, address, email, contact, items }),
+                });
+
+                let result = null;
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`Unexpected response from server: ${text.slice(0, 200)}`);
+                }
+
+                if (!response.ok || !result?.success) {
+                    const message = result?.message || `Order submission failed. (${response.status}) Please try again later.`;
+                    alert(message);
+                    throw new Error(message);
+                }
+
+                document.getElementById('checkout-form').style.display = 'none';
+                document.getElementById('checkout-success').style.display = 'block';
+            } catch (error) {
+                console.error('Checkout submission error:', error);
+                alert(error?.message || 'Order submission failed. Please try again later.');
+            }
+        });
+    </script>
+    <footer>
+        <div class="footer-grid">
+            <div class="footer-brand">
+            <span class="footer-logo-text">PYNX</span>
+                <p>Premium headwear and swimwear for those who move with purpose. Designed to last. Built to stand out.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Navigate</h4>
+                <a href="index.html#home">Home</a>
+                <a href="index.html#about">About</a>
+                <a href="contact.html">Contact Us</a>
+                <a href="login.html" id="checkout-footer-auth-link">Login</a>
+            </div>
+            <div class="footer-col">
+                <h4>Support</h4>
+                <a href="contact.html">Contact Us</a>
+            </div>
+            <div class="footer-col">
+                <h4>Stay Connected</h4>
+                <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p>
+                <div class="nl-form">
+                    <input type="email" id="nl-email" placeholder="Your email">
+                    <button onclick="subscribeNewsletter()">→</button>
+                </div>
+                <div class="social-icons">
+                    <a href="https://www.instagram.com/pynx_official26?igsh=MWkxbDRiOG84djZkdQ==" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
+                        <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                            <rect x="6" y="6" width="20" height="20" rx="6" stroke="white" stroke-width="2" fill="none"/>
+                            <circle cx="16" cy="16" r="5" stroke="white" stroke-width="2" fill="none"/>
+                            <circle cx="22.2" cy="9.8" r="1.3" fill="white"/>
+                        </svg>
+                    </a>
+                    <a href="#" class="social-link" aria-label="Facebook">
+                        <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                            <path d="M18.5 7H20.5V10H18.5C17.948 10 17.5 10.448 17.5 11V13H20.5L20 16H17.5V25H14.5V16H12V13H14.5V11C14.5 8.791 16.291 7 18.5 7Z" fill="white"/>
+                        </svg>
+                    </a>
+                    <a href="https://www.tiktok.com/@pynx_official26?_r=1&_t=ZS-97Fcah0WyhM" class="social-link" aria-label="TikTok" target="_blank" rel="noopener noreferrer">
+                        <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                            <path d="M22 8c.667 1.333 2 2 4 2v3c-1.333 0 -2.667-.333-4-1v7a7 7 0 1 1-5-6.708V16a3 3 0 1 0 3 3V8h2z" fill="white"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2026 PYNX. All rights reserved.</p>
+            <div class="footer-bottom-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Cookie Settings</a>
+            </div>
+        </div>
+    </footer>
+
+    <div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+    <aside class="cart-drawer" id="cart-drawer">
+        <div class="drawer-header">
+            <span class="drawer-title">Your Cart</span>
+            <button class="drawer-close" onclick="closeCart()">×</button>
+        </div>
+        <div class="cart-items-list" id="cart-items-list">
+            <div class="cart-empty-msg" id="cart-empty">
+                <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+                Your bag is empty
+            </div>
+        </div>
+        <div class="cart-footer">
+            <div class="cart-subtotal">
+                <span>Subtotal</span>
+                <span id="cart-total">₱0.00</span>
+            </div>
+            <p class="cart-note">Shipping & taxes calculated at checkout</p>
+        <button class="btn-primary checkout-btn" onclick="checkout()">Checkout</button>
+            <button class="drawer-close" onclick="closeWishlist()">×</button>
+        </div>
+        <div class="cart-items-list" id="wishlist-items-list">
+            <div class="cart-empty-msg" id="wishlist-empty">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+                Your wishlist is empty
+            </div>
+        </div>
+    </aside>
+
+    <script src="js/script.js"></script>
+</body>
+</html>

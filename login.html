@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="customer-auth-page">
+<header id="site-header" class="customer-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home">Home</a></li>
+                <li><a href="contact.html">Contact Us</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+<main class="page-auth customer-auth-page-main">
+    <section class="auth-panel customer-auth-panel">
+        <div class="auth-inner customer-auth-inner">
+            <div class="section-header customer-header-copy">
+                <p class="section-eyebrow">Customer Access</p>
+                <h1>Welcome back</h1>
+                <p class="page-sub">Log in to your PYNX account to continue shopping, checkout faster, and track every order.</p>
+            </div>
+            <form id="login-form" class="auth-form customer-auth-form">
+                <label for="login-email">Email</label>
+                <input id="login-email" type="email" placeholder="you@example.com" required>
+                <label for="login-password">Password</label>
+                <input id="login-password" type="password" placeholder="Enter your password" required>
+                <p class="auth-note" id="login-note">Sign in to continue.</p>
+                <div class="form-buttons">
+                    <button type="submit" class="btn-primary form-submit">Log In</button>
+                    <a id="btn-google" class="btn-google-icon" href="https://accounts.google.com/signin" target="_blank" rel="noopener" title="Continue with Google">Continue with Google</a>
+                </div>
+            </form>
+            <p class="auth-switch">Don't have an account? <a href="signup.html">Create account</a></p>
+        </div>
+
+    </section>
+</main>
+<script src="js/admin-link.js"></script>
+<script>
+    const loginForm = document.getElementById('login-form');
+    const loginNote = document.getElementById('login-note');
+    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+        ? 'http://localhost:5000'
+        : '';
+    const returnPage = new URLSearchParams(window.location.search).get('return');
+    const createAccountLink = document.querySelector('.auth-switch a[href="signup.html"]');
+    if (createAccountLink && returnPage === 'checkout.html') {
+        createAccountLink.href = 'signup.html?return=checkout.html';
+    }
+
+    loginForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+
+        if (!email || !password) {
+            loginNote.textContent = 'Please enter both email and password.';
+            loginNote.classList.add('error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/api/customers/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Invalid customer email or password.');
+
+            const account = { ...result.customer, signedInAt: new Date().toISOString() };
+            localStorage.setItem('pynx_user', JSON.stringify(account));
+            localStorage.setItem('pynx_logged_in', 'true');
+            localStorage.setItem('pynx_customer_token', result.token || '');
+            localStorage.removeItem('pynx_admin_token');
+            loginNote.textContent = 'Signed in. Redirecting...';
+            loginNote.classList.remove('error');
+            setTimeout(() => { window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html'; }, 700);
+        } catch (error) {
+            loginNote.textContent = error instanceof TypeError
+                ? 'The login server is unavailable. Please start PYNX with start_server.bat or start_server.ps1 and try again.'
+                : (error.message || 'Invalid customer email or password.');
+            loginNote.classList.add('error');
+        }
+    });
+
+    loginForm.addEventListener('input', function() {
+        loginNote.textContent = 'Sign in to continue.';
+        loginNote.classList.remove('error');
+    });
+
+    const googleBtn = document.getElementById('btn-google');
+    if (googleBtn) {
+        googleBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            const url = this.href;
+            const w = 600, h = 700;
+            const left = window.screenX + Math.max(0, Math.floor((window.outerWidth - w) / 2));
+            const top = window.screenY + Math.max(0, Math.floor((window.outerHeight - h) / 2));
+            window.open(url, 'googleSignIn', `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${w},height=${h},left=${left},top=${top}`);
+        });
+    }
+</script>
+<footer>
+    <div class="footer-bottom">
+        <p>© 2026 PYNX. All rights reserved.</p>
+    </div>
+</footer>
+</body>
+</html>

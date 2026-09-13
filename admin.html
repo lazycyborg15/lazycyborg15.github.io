@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="admin-page">
+<header id="site-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home" data-page="home" class="nav-link">Home</a></li>
+                <li><a href="shop.html" data-page="shop" class="nav-link">Shop</a></li>
+                <li><a href="contact.html" data-page="contact" class="nav-link">Contact Us</a></li>
+                <li><a href="admin.html" data-page="admin" class="nav-link active">Admin</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+<main class="page-auth admin-page-auth">
+    <section class="auth-panel">
+        <div class="auth-inner">
+            <div class="section-header">
+                <div class="admin-logo">
+                    <span class="header-logo-text">PYNX</span>
+                </div>
+                <p class="section-eyebrow">Staff Portal</p>
+                <h1>Admin View</h1>
+                <p class="page-sub">Secure staff access to orders, notifications, and reporting.</p>
+            </div>
+
+            <div id="login-view">
+                <form class="auth-form" id="admin-login-form">
+                    <label for="admin-email">Email</label>
+                    <input type="email" id="admin-email" placeholder="admin@pynx.com" required>
+                    <label for="admin-password">Password</label>
+                    <input type="password" id="admin-password" placeholder="Enter password" minlength="6" required>
+                    <p class="auth-note" id="admin-note">Staff login required to access orders.</p>
+                    <button type="submit" class="btn-primary form-submit">Log In</button>
+                </form>
+            </div>
+
+            <div id="admin-dashboard" class="admin-dashboard" style="display:none;">
+                <div class="admin-dashboard-header">
+                    <div class="admin-dashboard-copy">
+                        <p class="section-eyebrow">Welcome back</p>
+                        <h1>Admin Dashboard</h1>
+                        <p class="page-sub">Review recent orders and customer concerns.</p>
+                    </div>
+                    <div class="admin-dashboard-actions">
+                        <button class="btn-secondary" id="admin-refresh">Refresh</button>
+                        <button class="btn-secondary" id="admin-logout">Logout</button>
+                    </div>
+                </div>
+
+                <div class="admin-tabs">
+                    <button id="tab-orders" class="tab-button active" onclick="switchAdminTab('orders')">Orders</button>
+                    <button id="tab-contacts" class="tab-button" onclick="switchAdminTab('contacts')">Customer Concerns</button>
+                    <button id="tab-products" class="tab-button" onclick="switchAdminTab('products')">Products</button>
+                </div>
+
+                <div id="orders-section" class="admin-tab-section">
+                    <div class="dashboard-cards">
+                        <div class="dashboard-card">
+                            <h2>Total Orders</h2>
+                            <strong id="order-count">0</strong>
+                            <p class="card-note">All orders from store database.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Total Revenue</h2>
+                            <strong id="total-revenue">₱0.00</strong>
+                            <p class="card-note">Combined value of all orders.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Average Order</h2>
+                            <strong id="avg-order">₱0.00</strong>
+                            <p class="card-note">Average order value.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Last Activity</h2>
+                            <strong id="last-refresh">Just now</strong>
+                            <p class="card-note">Orders updated when you refresh.</p>
+                        </div>
+                    </div>
+
+                    <div class="auth-note admin-status" id="admin-status">Loading orders...</div>
+                    <div class="orders-list-container" id="orders-list"></div>
+                </div>
+
+                <div id="contacts-section" class="admin-tab-section" style="display:none;">
+                    <div class="dashboard-cards">
+                        <div class="dashboard-card">
+                            <h2>Total Concerns</h2>
+                            <strong id="concerns-count">0</strong>
+                            <p class="card-note">Customer messages received.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Last Response</h2>
+                            <strong id="last-concern-time">Just now</strong>
+                            <p class="card-note">Most recent message submitted.</p>
+                        </div>
+                    </div>
+                    <div class="auth-note admin-status" id="contacts-status">Loading customer concerns...</div>
+                    <div class="contacts-list-container" id="contacts-list"></div>
+                </div>
+
+                <div id="products-section" class="admin-tab-section" style="display:none;">
+                    <div class="dashboard-cards">
+                        <div class="dashboard-card">
+                            <h2>Products</h2>
+                            <strong id="product-count">0</strong>
+                            <p class="card-note">Editable product catalog.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Sale Items</h2>
+                            <strong id="sale-count">0</strong>
+                            <p class="card-note">Items marked discount.</p>
+                        </div>
+                    </div>
+                    <div class="auth-note admin-status" id="products-status">Loading products...</div>
+                    <div class="products-list-container" id="products-list"></div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</main>
+<script>
+    const loginView = document.getElementById('login-view');
+    const adminDashboard = document.getElementById('admin-dashboard');
+    const adminNote = document.getElementById('admin-note');
+    const adminStatus = document.getElementById('admin-status');
+    const orderCount = document.getElementById('order-count');
+    const lastRefresh = document.getElementById('last-refresh');
+    const ordersList = document.getElementById('orders-list');
+    const adminLoginForm = document.getElementById('admin-login-form');
+    const adminLogout = document.getElementById('admin-logout');
+    const ordersSection = document.getElementById('orders-section');
+    const contactsSection = document.getElementById('contacts-section');
+    const productsSection = document.getElementById('products-section');
+    const contactsList = document.getElementById('contacts-list');
+    const contactsStatus = document.getElementById('contacts-status');
+    const productsList = document.getElementById('products-list');
+    const productsStatus = document.getElementById('products-status');
+    const productCount = document.getElementById('product-count');
+    const saleCount = document.getElementById('sale-count');
+
+    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+        ? 'http://localhost:5000'
+        : '';
+
+    function getToken() {
+        return localStorage.getItem('pynx_admin_token');
+    }
+
+    function getApiUrl(path) {
+        return `${API_BASE}${path}`;
+    }
+
+    async function parseResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            return response.json();
+        }
+        const text = await response.text();
+        return { success: false, message: `Unexpected response: ${text.slice(0, 200)}` };
+    }
+
+    function loadLocalContacts() {
+        try {
+            const stored = localStorage.getItem('pynx_contacts');
+            if (!stored) return [];
+            return JSON.parse(stored);
+        } catch (err) {
+            console.error('Failed to parse local contacts:', err);
+            return [];
+        }
+    }
+
+    function mergeContacts(remote, local) {
+        const combined = [...local, ...remote];
+        const seen = new Set();
+        return combined.filter(contact => {
+            const key = `${contact.email}|${contact.message}|${contact.createdAt}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    function showLogin() {
+        loginView.style.display = 'block';
+        adminDashboard.style.display = 'none';
+        adminNote.textContent = 'Staff login required to access orders.';
+        adminNote.classList.remove('error');
+    }
+
+    function showDashboard() {
+        loginView.style.display = 'none';
+        adminDashboard.style.display = 'block';
+    }
+
+    async function fetchOrders() {
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl('/api/admin/orders'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                const message = data.message || 'Unable to load orders.';
+                if (response.status === 401) {
+                    throw new Error(message);
+                }
+                adminStatus.textContent = message;
+                adminStatus.classList.add('error');
+                adminStatus.classList.remove('loading');
+                orderCount.textContent = '—';
+                ordersList.innerHTML = '<div class="empty-state-card">Orders cannot be loaded right now.</div>';
+                showDashboard();
+                return;
+            }
+
+            adminStatus.textContent = 'Recent orders are displayed below.';
+            adminStatus.classList.remove('error');
+            orderCount.textContent = `${data.orders.length} order(s)`;
+            lastRefresh.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            // Helper function to calculate order total
+            const calculateOrderTotal = (itemsArr) => {
+                return itemsArr.reduce((sum, item) => sum + ((item.product?.price || 0) * (item.qty || 0)), 0);
+            };
+            
+            // Calculate total revenue and average order value
+            let totalRevenue = 0;
+            const orderTotals = [];
+            
+            data.orders.forEach(order => {
+                const itemsArr = (order.items || []);
+                const orderTotal = calculateOrderTotal(itemsArr);
+                orderTotals.push(orderTotal);
+                totalRevenue += orderTotal;
+            });
+            
+            const avgOrder = data.orders.length > 0 ? totalRevenue / data.orders.length : 0;
+            document.getElementById('total-revenue').textContent = `₱${totalRevenue.toFixed(2)}`;
+            document.getElementById('avg-order').textContent = `₱${avgOrder.toFixed(2)}`;
+            
+            ordersList.innerHTML = data.orders.map((order, index) => {
+                const itemsArr = (order.items || []);
+                const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
+                const createdDate = new Date(order.createdAt).toLocaleString();
+                const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
+                    const name = item.product?.name || 'Item';
+                    const price = (item.product?.price || 0).toFixed(2);
+                    const qty = item.qty || 1;
+                    const size = item.size ? ` (${item.size})` : '';
+                    const img = item.product?.image ? `<img class="item-thumb" src="${item.product.image}" alt="${name}">` : '';
+                    return `<li class="item-chip">${img}<span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
+                }).join('')}</ul>` : '<span class="empty-state">No items</span>';
+                return `<div class="order-card">
+                    <div class="order-card-header">
+                        <span class="order-number">Order #${index+1}</span>
+                        <span class="order-total-badge">₱${total.toFixed(2)}</span>
+                    </div>
+                    <div class="order-card-body">
+                        <div class="order-info-section">
+                            <div class="order-info-row">
+                                <label>Name:</label>
+                                <span>${order.firstName} ${order.lastName}</span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Email:</label>
+                                <span><a href="mailto:${order.email}">${order.email}</a></span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Phone:</label>
+                                <span>${order.contact}</span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Address:</label>
+                                <span>${order.address}</span>
+                            </div>
+                        </div>
+                        <div class="order-divider"></div>
+                        <div class="order-items-section">
+                            <label class="items-label">Items:</label>
+                            ${itemsHtml}
+                        </div>
+                        <div class="order-divider"></div>
+                        <div class="order-footer-section">
+                            <div class="order-info-row">
+                                <label>Total:</label>
+                                <span class="order-total-value">₱${total.toFixed(2)}</span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Created:</label>
+                                <span>${createdDate}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            if (data.orders.length === 0) {
+                ordersList.innerHTML = '<div class="empty-state-card">No orders available yet.</div>';
+            }
+            showDashboard();
+        } catch (error) {
+            console.error(error);
+            if (error.message.includes('Failed to fetch')) {
+                adminNote.textContent = 'Cannot reach backend. Make sure the server is running at http://localhost:5000.';
+                adminNote.classList.add('error');
+                showLogin();
+                return;
+            }
+            if (error.message.includes('Invalid or expired token') || error.message.includes('Missing authorization token')) {
+                localStorage.removeItem('pynx_admin_token');
+                adminNote.textContent = 'Session expired. Please log in again.';
+                adminNote.classList.add('error');
+                showLogin();
+                return;
+            }
+            adminStatus.textContent = error.message || 'Unable to load orders.';
+            adminStatus.classList.add('error');
+            adminStatus.classList.remove('loading');
+            orderCount.textContent = '—';
+            ordersList.innerHTML = '<div class="empty-state-card">Orders cannot be loaded right now.</div>';
+            showDashboard();
+        }
+    }
+
+    async function fetchContacts() {
+        const token = getToken();
+        const localContacts = loadLocalContacts();
+        let contacts = localContacts.slice();
+        let statusMessage = 'Customer concerns are displayed below.';
+        let statusError = false;
+
+        if (!token) {
+            // If not logged in, show local submissions only
+            contactsStatus.textContent = 'Showing local submissions. Log in to see backend entries.';
+            contactsStatus.classList.remove('error');
+            document.getElementById('concerns-count').textContent = `${contacts.length} concern(s)`;
+            document.getElementById('last-concern-time').textContent = contacts.length > 0 ? new Date(contacts[0].createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No data';
+            contactsList.innerHTML = contacts.map((contact, index) => {
+                const submittedDate = new Date(contact.createdAt).toLocaleString();
+                return `<div class="concern-card">
+                    <div class="concern-card-header">
+                        <span class="concern-number">Message #${index+1}</span>
+                        <span class="concern-status-badge">Received</span>
+                    </div>
+                    <div class="concern-card-body">
+                        <div class="concern-info-section">
+                            <div class="concern-info-row">
+                                <label>Name:</label>
+                                <span>${contact.name}</span>
+                            </div>
+                            <div class="concern-info-row">
+                                <label>Email:</label>
+                                <span><a href="mailto:${contact.email}">${contact.email}</a></span>
+                            </div>
+                            <div class="concern-info-row">
+                                <label>Phone:</label>
+                                <span>${contact.phone || '—'}</span>
+                            </div>
+                        </div>
+                        <div class="concern-divider"></div>
+                        <div class="concern-message-section">
+                            <label class="message-label">Message:</label>
+                            <p class="concern-message-text">${contact.message}</p>
+                        </div>
+                        <div class="concern-divider"></div>
+                        <div class="concern-footer-section">
+                            <div class="concern-info-row">
+                                <label>Submitted:</label>
+                                <span>${submittedDate}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            if (contacts.length === 0) {
+                contactsList.innerHTML = '<div class="empty-state-card">No customer concerns yet.</div>';
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl('/api/admin/contacts'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                const message = data.message || 'Unable to load customer concerns.';
+                if (response.status === 401) {
+                    throw new Error(message);
+                }
+                statusMessage = message;
+                statusError = true;
+            } else {
+                contacts = mergeContacts(data.contacts || [], localContacts);
+            }
+        } catch (error) {
+            console.error(error);
+            if (error.message.includes('Invalid or expired token') || error.message.includes('Missing authorization token')) {
+                localStorage.removeItem('pynx_admin_token');
+                adminNote.textContent = 'Session expired. Please log in again.';
+                adminNote.classList.add('error');
+                showLogin();
+                return;
+            }
+            statusMessage = 'Unable to load backend concerns; showing local submissions.';
+            statusError = false;
+        }
+
+        // Update dashboard metrics
+        document.getElementById('concerns-count').textContent = `${contacts.length} concern(s)`;
+        document.getElementById('last-concern-time').textContent = contacts.length > 0 ? new Date(contacts[0].createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No data';
+
+        contactsStatus.textContent = statusMessage;
+        contactsStatus.classList.toggle('error', statusError);
+        contactsList.innerHTML = contacts.map((contact, index) => {
+            const submittedDate = new Date(contact.createdAt).toLocaleString();
+            return `<div class="concern-card">
+                <div class="concern-card-header">
+                    <span class="concern-number">Message #${index+1}</span>
+                    <span class="concern-status-badge">Received</span>
+                </div>
+                <div class="concern-card-body">
+                    <div class="concern-info-section">
+                        <div class="concern-info-row">
+                            <label>Name:</label>
+                            <span>${contact.name}</span>
+                        </div>
+                        <div class="concern-info-row">
+                            <label>Email:</label>
+                            <span><a href="mailto:${contact.email}">${contact.email}</a></span>
+                        </div>
+                        <div class="concern-info-row">
+                            <label>Phone:</label>
+                            <span>${contact.phone || '—'}</span>
+                        </div>
+                    </div>
+                    <div class="concern-divider"></div>
+                    <div class="concern-message-section">
+                        <label class="message-label">Message:</label>
+                        <p class="concern-message-text">${contact.message}</p>
+                    </div>
+                    <div class="concern-divider"></div>
+                    <div class="concern-footer-section">
+                        <div class="concern-info-row">
+                            <label>Submitted:</label>
+                            <span>${submittedDate}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        if (contacts.length === 0) {
+            contactsList.innerHTML = '<div class="empty-state-card">No customer concerns yet.</div>';
+        }
+    }
+
+    function switchAdminTab(tab) {
+        const ordersTab = document.getElementById('tab-orders');
+        const contactsTab = document.getElementById('tab-contacts');
+        const productsTab = document.getElementById('tab-products');
+        
+        // Hide all sections first
+        ordersSection.style.display = 'none';
+        contactsSection.style.display = 'none';
+        productsSection.style.display = 'none';
+        
+        // Remove active class from all tabs
+        ordersTab.classList.remove('active');
+        contactsTab.classList.remove('active');
+        productsTab.classList.remove('active');
+        
+        // Show and activate the selected tab
+        if (tab === 'contacts') {
+            contactsSection.style.display = '';
+            contactsTab.classList.add('active');
+            fetchContacts();
+        } else if (tab === 'products') {
+            productsSection.style.display = '';
+            productsTab.classList.add('active');
+            fetchProducts();
+        } else {
+            ordersSection.style.display = '';
+            ordersTab.classList.add('active');
+            fetchOrders();
+        }
+    }
+
+    async function fetchProducts() {
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        try {
+            const response = await fetch(`${getApiUrl('/api/admin/products')}?updated=${Date.now()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to load products.');
+            }
+
+            productsStatus.textContent = 'Editable products loaded.';
+            productsStatus.classList.remove('error');
+            productCount.textContent = `${data.products.length} product(s)`;
+            const saleItems = data.products.filter(p => p.onSale || (typeof p.originalPrice === 'number' && p.originalPrice > p.price));
+            saleCount.textContent = `${saleItems.length} sale item(s)`;
+
+            productsList.innerHTML = data.products.map(product => {
+                const isDiscount = product.onSale || (typeof product.originalPrice === 'number' && product.originalPrice > product.price);
+                const saleBadge = isDiscount ? `<span class="item-badge sale-badge">Discount</span>` : '';
+                return `<div class="product-card admin-product-card">
+                    <div class="product-card-body">
+                        <div class="admin-product-header">
+                            <span class="product-name">${product.name}</span>
+                            ${saleBadge}
+                        </div>
+                        <div class="product-edit-row">
+                            <label>Price</label>
+                            <input type="number" min="0" step="0.01" value="${product.price}" id="product-price-${product.id}">
+                        </div>
+                        <div class="product-edit-row">
+                            <label>Original Price</label>
+                            <input type="number" min="0" step="0.01" value="${product.originalPrice ?? product.price}" id="product-original-${product.id}">
+                        </div>
+                        <div class="product-edit-row">
+                            <label>On Sale</label>
+                            <input type="checkbox" id="product-onsale-${product.id}" ${product.onSale ? 'checked' : ''}>
+                        </div>
+                                <div class="product-edit-actions">
+                                    <button class="btn-secondary" onclick="saveProduct(${product.id})">Save</button>
+                                    ${isDiscount ? `<button class="btn-secondary" onclick="toggleSale(${product.id}, false)">Remove Discount</button>` : `<button class="btn-primary" onclick="toggleSale(${product.id}, true)">Add Discount</button>`}
+                                </div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (error) {
+            productsStatus.textContent = error.message;
+            productsStatus.classList.add('error');
+            productsList.innerHTML = '<div class="empty-state-card">Products cannot be loaded right now.</div>';
+        }
+    }
+
+    async function saveProduct(productId) {
+        const price = Number(document.getElementById(`product-price-${productId}`).value);
+        const originalPrice = Number(document.getElementById(`product-original-${productId}`).value);
+        const onSale = document.getElementById(`product-onsale-${productId}`).checked;
+        const token = getToken();
+
+        if (!token) {
+            showLogin();
+            return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/products/${productId}`), {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ price, originalPrice, onSale })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to save product.');
+            }
+            productsStatus.textContent = `Saved ${data.product.name}.`;
+            productsStatus.classList.remove('error');
+            fetchProducts();
+        } catch (error) {
+            productsStatus.textContent = error.message;
+            productsStatus.classList.add('error');
+        }
+    }
+
+    async function toggleSale(productId, makeSale) {
+        const token = getToken();
+        if (!token) {
+            showLogin();
+            return;
+        }
+        const priceEl = document.getElementById(`product-price-${productId}`);
+        const originalEl = document.getElementById(`product-original-${productId}`);
+        const price = Number(priceEl ? priceEl.value : 0);
+        const originalPrice = Number(originalEl ? originalEl.value : price);
+
+        try {
+            productsStatus.textContent = makeSale ? 'Marking as discounted...' : 'Removing discount...';
+            const response = await fetch(getApiUrl(`/api/admin/products/${productId}`), {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ price, originalPrice, onSale: Boolean(makeSale) })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to update product.');
+            }
+            productsStatus.textContent = `Updated ${data.product.name}.`;
+            productsStatus.classList.remove('error');
+            fetchProducts();
+        } catch (err) {
+            productsStatus.textContent = err.message || 'Unable to update product.';
+            productsStatus.classList.add('error');
+        }
+    }
+
+    adminLoginForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const email = document.getElementById('admin-email').value.trim();
+        const password = document.getElementById('admin-password').value;
+        if (!email || !password) {
+            adminNote.textContent = 'Please enter both email and password.';
+            adminNote.classList.add('error');
+            return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl('/api/admin/login'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Invalid credentials.');
+            }
+
+            localStorage.setItem('pynx_admin_token', data.token);
+            adminNote.textContent = 'Login successful. Loading orders...';
+            adminNote.classList.remove('error');
+            await fetchOrders();
+        } catch (error) {
+            adminNote.textContent = error.message;
+            adminNote.classList.add('error');
+        }
+    });
+
+    adminLogout.addEventListener('click', function() {
+        localStorage.removeItem('pynx_admin_token');
+        showLogin();
+    });
+
+    document.getElementById('admin-refresh').addEventListener('click', function() {
+        if (productsSection.style.display !== 'none') {
+            productsStatus.textContent = 'Refreshing products...';
+            productsStatus.classList.remove('error');
+            fetchProducts();
+        } else if (contactsSection.style.display !== 'none') {
+            contactsStatus.textContent = 'Refreshing customer concerns...';
+            contactsStatus.classList.remove('error');
+            fetchContacts();
+        } else {
+            adminStatus.textContent = 'Refreshing orders...';
+            adminStatus.classList.remove('error');
+            fetchOrders();
+        }
+    });
+
+    fetchOrders();
+</script>
+<footer>
+    <div class="footer-bottom">
+        <p>© 2026 PYNX. All rights reserved.</p>
+    </div>
+</footer>
+</body>
+</html>

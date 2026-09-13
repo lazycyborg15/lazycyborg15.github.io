@@ -1,0 +1,20 @@
+[
+  {
+    "id": "0c43cd0e-4f5c-4c72-b74e-662118eb46b2",
+    "firstName": "ouzel",
+    "lastName": "lepiten",
+    "email": "boydlepiten11@gmail.com",
+    "passwordSalt": "97fa91f47f8a7d7a60ec31f5c3d76037",
+    "passwordHash": "c85acd5b223c74b7999989f57358355824be9e857ea1c1a8c97db031d9a23dff48d66d7f2828027437819b13f21a59a7792e702b96d75d45cdc98201afefd5e5",
+    "createdAt": "2026-09-11T18:16:46.411Z"
+  },
+  {
+    "id": "f22d73ba-f99c-4cdb-8dc5-e49cea7740cc",
+    "firstName": "ouzel",
+    "lastName": "boydie",
+    "email": "boydie456@gmail.com",
+    "passwordSalt": "05215f9190b7af2f1f7f4c9c7f705a80",
+    "passwordHash": "580d05716b8887df6b638f5492e0a244af8ea9172d44b6e2967550f8600a491b46ac5a5499e9563df91b0aa4139bac79fc096ad1fbd3acad3575caee7b1407b6",
+    "createdAt": "2026-09-13T03:05:03.742Z"
+  }
+]
