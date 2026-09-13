@@ -371,19 +371,20 @@ function addToCart(product, size) {
 }
 
 function updateCartUI() {
+    const badge = document.getElementById('cart-badge');
+    const list  = document.getElementById('cart-items-list');
+    const empty = document.getElementById('cart-empty');
+    if (!badge || !list || !empty) return;
+
     ensureDrawerClearButtons();
     selectedCartKeys = new Set([...selectedCartKeys].filter(key => cart.some(item => item.key === key)));
     const total = cart.reduce((s, i) => s + i.qty, 0);
 
     // Badge
-    const badge = document.getElementById('cart-badge');
     badge.textContent = total;
     badge.classList.toggle('show', total > 0);
 
     // Items list
-    const list  = document.getElementById('cart-items-list');
-    const empty = document.getElementById('cart-empty');
-
     // Remove existing items (not the empty msg)
     list.querySelectorAll('.cart-item').forEach(el => el.remove());
 
@@ -840,7 +841,7 @@ function closeMobileNav() {
 ──────────────────────────────────────── */
 // Header shadow on scroll
 window.addEventListener('scroll', () => {
-    document.getElementById('site-header').classList.toggle('scrolled', window.scrollY > 30);
+    document.getElementById('site-header')?.classList.toggle('scrolled', window.scrollY > 30);
 });
 
 // Scroll reveal

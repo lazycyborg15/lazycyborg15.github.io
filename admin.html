@@ -767,7 +767,7 @@
                 localStorage.setItem('pynx_admin_token', 'local-admin-session');
                 adminNote.textContent = 'Local admin mode. Start the API server to save changes and load orders.';
                 adminNote.classList.remove('error');
-                showDashboard();
+                await fetchOrders();
                 return;
             }
 
@@ -790,7 +790,7 @@
                 localStorage.setItem('pynx_admin_token', 'local-admin-session');
                 adminNote.textContent = 'Local admin mode. Start the API server to save changes and load orders.';
                 adminNote.classList.remove('error');
-                showDashboard();
+                await fetchOrders();
                 return;
             }
             adminNote.textContent = error.message || 'Invalid credentials.';
