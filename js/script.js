@@ -236,8 +236,8 @@ function selectSize(size, btn) {
 }
 
 function closeModal() {
-    document.getElementById('modal-overlay').classList.remove('show');
-    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('modal-overlay')?.classList.remove('show');
+    document.getElementById('overlay')?.classList.remove('show');
     currentProduct = null;
 }
 
@@ -580,13 +580,13 @@ function removeSelectedCart() {
 }
 
 function openCart() {
-    document.getElementById('cart-drawer').classList.add('open');
-    document.getElementById('overlay').classList.add('show');
+    document.getElementById('cart-drawer')?.classList.add('open');
+    document.getElementById('overlay')?.classList.add('show');
 }
 
 function closeCart() {
-    document.getElementById('cart-drawer').classList.remove('open');
-    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('cart-drawer')?.classList.remove('open');
+    document.getElementById('overlay')?.classList.remove('show');
 }
 
 function closeAll() {
@@ -640,20 +640,22 @@ function openWishlist() {
     renderWishlistUI();
     updateWishlistBadge();
     renderWishlistUI();
-    document.getElementById('wishlist-drawer').classList.add('open');
-    document.getElementById('overlay').classList.add('show');
+    document.getElementById('wishlist-drawer')?.classList.add('open');
+    document.getElementById('overlay')?.classList.add('show');
 }
 
 function closeWishlist() {
-    document.getElementById('wishlist-drawer').classList.remove('open');
-    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('wishlist-drawer')?.classList.remove('open');
+    document.getElementById('overlay')?.classList.remove('show');
 }
 
 function renderWishlistUI() {
-    ensureDrawerClearButtons();
-    selectedWishlistIds = new Set([...selectedWishlistIds].filter(id => wishlist.includes(id)));
     const list = document.getElementById('wishlist-items-list');
     const empty = document.getElementById('wishlist-empty');
+    if (!list || !empty) return;
+
+    ensureDrawerClearButtons();
+    selectedWishlistIds = new Set([...selectedWishlistIds].filter(id => wishlist.includes(id)));
     list.querySelectorAll('.wishlist-item').forEach(el => el.remove());
 
     if (wishlist.length === 0) {

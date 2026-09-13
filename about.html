@@ -22,13 +22,21 @@
             </ul>
         </nav>
         <div class="header-actions">
-            <button class="menu-toggle" id="menu-toggle" onclick="toggleAboutMenu()" aria-label="Toggle menu" aria-expanded="false"><span></span><span></span><span></span></button>
+            <button class="wishlist-header-btn" onclick="openWishlist()" aria-label="Open wishlist">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+                <span class="wishlist-badge" id="wishlist-badge">0</span>
+            </button>
+            <button class="cart-btn" onclick="openCart()" aria-label="Open cart">
+                <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+                <span class="cart-badge" id="cart-badge">0</span>
+            </button>
+            <button class="menu-toggle" id="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu" aria-expanded="false"><span></span><span></span><span></span></button>
             <div class="menu-dropdown" id="menu-dropdown">
-                <a href="index.html#home" onclick="closeAboutMenu()">Home</a>
-                <a href="shop.html" onclick="closeAboutMenu()">Shop</a>
-                <a href="about.html" onclick="closeAboutMenu()">About</a>
-                <a href="contact.html" onclick="closeAboutMenu()">Contact Us</a>
-                <a href="login.html" onclick="closeAboutMenu()">Login</a>
+                <a href="index.html#home" onclick="closeMenuDropdown()">Home</a>
+                <a href="shop.html" onclick="closeMenuDropdown()">Shop</a>
+                <a href="about.html" onclick="closeMenuDropdown()">About</a>
+                <a href="contact.html" onclick="closeMenuDropdown()">Contact Us</a>
+                <a href="login.html" onclick="closeMenuDropdown()">Login</a>
             </div>
         </div>
     </div>
@@ -77,30 +85,50 @@
     </div>
     <div class="footer-bottom"><p>© 2026 PYNX. All rights reserved.</p></div>
 </footer>
+
+<div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+<aside class="cart-drawer" id="cart-drawer">
+    <div class="drawer-header">
+        <span class="drawer-title">Your Cart</span>
+        <button class="drawer-close" onclick="closeCart()">×</button>
+    </div>
+    <div class="cart-items-list" id="cart-items-list">
+        <div class="cart-empty-msg" id="cart-empty">
+            <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+            Your bag is empty
+        </div>
+    </div>
+    <div class="cart-footer">
+        <div class="cart-subtotal">
+            <span>Subtotal</span>
+            <span id="cart-total">₱0.00</span>
+        </div>
+        <p class="cart-note">Shipping & taxes calculated at checkout</p>
+        <button class="btn-primary checkout-btn" onclick="checkout()">Checkout</button>
+    </div>
+</aside>
+
+<aside class="cart-drawer wishlist-drawer" id="wishlist-drawer">
+    <div class="drawer-header">
+        <span class="drawer-title">Your Wishlist</span>
+        <button class="drawer-close" onclick="closeWishlist()">×</button>
+    </div>
+    <div class="cart-items-list" id="wishlist-items-list">
+        <div class="cart-empty-msg" id="wishlist-empty">
+            <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.35-10-10c0-3.03 2.46-5.5 5.5-5.5 1.74 0 3.41.88 4.5 2.24C12.09 6.38 13.76 5.5 15.5 5.5 18.54 5.5 21 7.97 21 11c-3 5.65-9 10-9 10z"/></svg>
+            Your wishlist is empty
+        </div>
+    </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/script.js"></script>
 <script>
-    function toggleAboutMenu() { const menu = document.getElementById('menu-dropdown'); const button = document.getElementById('menu-toggle'); const open = menu.classList.toggle('open'); button.setAttribute('aria-expanded', open); }
-    function closeAboutMenu() { document.getElementById('menu-dropdown').classList.remove('open'); document.getElementById('menu-toggle').setAttribute('aria-expanded', 'false'); }
     const revealItems = document.querySelectorAll('.reveal');
     const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); revealObserver.unobserve(entry.target); } }), { threshold: .12 });
     revealItems.forEach(item => revealObserver.observe(item));
-
-    // Toggle the Login link to Logout whenever a customer session is active.
-    (function updateCustomerAuthLinks() {
-        const isLoggedIn = localStorage.getItem('pynx_logged_in') === 'true';
-        document.querySelectorAll('a[href="login.html"]').forEach(link => {
-            link.textContent = isLoggedIn ? 'Logout' : 'Login';
-            link.setAttribute('aria-label', isLoggedIn ? 'Log out of your customer account' : 'Log in to your customer account');
-            if (isLoggedIn) {
-                link.onclick = function(event) {
-                    event.preventDefault();
-                    localStorage.removeItem('pynx_logged_in');
-                    localStorage.removeItem('pynx_user');
-                    localStorage.removeItem('pynx_customer_token');
-                    window.location.href = 'login.html';
-                };
-            }
-        });
-    })();
 </script>
 </body>
 </html>
