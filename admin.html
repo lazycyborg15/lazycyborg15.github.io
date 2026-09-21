@@ -155,6 +155,8 @@
             : ''
     );
     const IS_STATIC_HOST = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
+    const STATIC_ADMIN_EMAIL = 'Contactpynx@gmail.com';
+    const STATIC_ADMIN_PASSWORD = 'PYNX2026!';
 
     function getToken() {
         return localStorage.getItem('pynx_admin_token');
@@ -223,6 +225,15 @@
         const token = getToken();
         if (!token) {
             showLogin();
+            return;
+        }
+
+        if (token === 'local-admin-session') {
+            showDashboard();
+            adminStatus.textContent = 'Signed in locally. Connect a deployed API to load orders from every device.';
+            adminStatus.classList.add('error');
+            orderCount.textContent = 'API required';
+            ordersList.innerHTML = '<div class="empty-state-card">Shared orders are unavailable until the admin API is deployed.</div>';
             return;
         }
 
@@ -577,6 +588,14 @@
             return;
         }
 
+        if (token === 'local-admin-session') {
+            contactsStatus.textContent = 'Signed in locally. Connect a deployed API to load concerns from every device.';
+            contactsStatus.classList.add('error');
+            document.getElementById('concerns-count').textContent = 'API required';
+            contactsList.innerHTML = '<div class="empty-state-card">Shared customer concerns are unavailable until the admin API is deployed.</div>';
+            return;
+        }
+
         try {
             const response = await fetch(`${getApiUrl('/api/admin/products')}?updated=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -688,6 +707,15 @@
             adminNote.classList.remove('error');
             await fetchOrders();
         } catch (error) {
+            if (IS_STATIC_HOST && email.toLowerCase() === STATIC_ADMIN_EMAIL.toLowerCase() && password === STATIC_ADMIN_PASSWORD) {
+                localStorage.setItem('pynx_admin_token', 'local-admin-session');
+                localStorage.setItem('pynx_admin_email', STATIC_ADMIN_EMAIL);
+                adminNote.textContent = 'Signed in locally. Shared orders and concerns require a deployed API.';
+                adminNote.classList.remove('error');
+                showDashboard();
+                await fetchOrders();
+                return;
+            }
             adminNote.textContent = error.message === 'Failed to fetch'
                 ? backendUnavailableMessage()
                 : error.message || 'Invalid credentials.';

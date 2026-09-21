@@ -128,7 +128,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || 'Contactpynx@gmail.com';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@pynx.com';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'Contactpynx@gmail.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PYNX2026!';
 const JWT_SECRET = process.env.JWT_SECRET || 'pynx_admin_secret';
 
