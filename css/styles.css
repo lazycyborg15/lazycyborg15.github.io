@@ -2870,6 +2870,31 @@
             .page-contact .page-sub { padding: 0 1rem; }
             .contact-panel { margin-bottom: 2rem; }
             .form-submit { width: 100%; min-width: auto; }
+
+            .admin-page-auth { padding: 0; }
+            .admin-page-auth .auth-panel { padding: 1.5rem .75rem 2rem; }
+            .admin-dashboard { width: 100%; margin-left: 0; padding: 1rem 0 2rem; }
+            .admin-dashboard-header { padding: 0 1rem 1rem; gap: 1rem; }
+            .admin-dashboard-header h1 { font-size: 1.8rem; }
+            .admin-dashboard-copy .page-sub { font-size: .8rem; }
+            .admin-dashboard-actions { width: 100%; }
+            .admin-dashboard-actions button { flex: 1; min-width: 0; }
+            .admin-tabs { padding: 0 1rem; gap: .5rem; overflow-x: auto; flex-wrap: nowrap; }
+            .tab-button { flex: 0 0 auto; padding: .7rem .85rem; font-size: .72rem; }
+            #orders-section { padding: 0 1rem; }
+            .dashboard-cards { grid-template-columns: 1fr 1fr; gap: .6rem; }
+            .dashboard-card { padding: .9rem .75rem; border-radius: 12px; }
+            .dashboard-card h2 { font-size: .65rem; }
+            .dashboard-card strong { font-size: 1.35rem; }
+            .card-note { font-size: .72rem; }
+            .orders-list-container, .contacts-list-container { padding: 0; gap: .8rem; }
+            .order-card-header, .concern-card-header { padding: .9rem; }
+            .order-card-body, .concern-card-body { padding: .9rem; }
+            .order-info-section, .concern-info-section { grid-template-columns: 1fr; gap: .8rem; }
+            .order-info-row label, .concern-info-row label { font-size: .72rem; }
+            .order-info-row span, .concern-info-row span { font-size: .85rem; }
+            .order-items li { white-space: normal; max-width: 100%; }
+            .products-list-container { padding: 0 1rem; }
         }
         /* Accessibility: respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
