@@ -83,7 +83,14 @@ async function loadProductCatalog() {
         const result = await response.json();
         const data = result.products;
         if (Array.isArray(data) && data.length) {
-            PRODUCTS = data;
+            PRODUCTS = data.map(product => ({
+                ...product,
+                sizes: Array.isArray(product.sizes) && product.sizes.length
+                    ? product.sizes
+                    : product.type === 'bikini'
+                        ? ['XS', 'S', 'M', 'L']
+                        : ['S', 'M', 'L', 'XL']
+            }));
             let cartChanged = false;
             cart = cart.map(item => {
                 const currentProduct = PRODUCTS.find(product => product.id === item.product?.id);
@@ -126,13 +133,10 @@ function cardHTML(p) {
     const priceHTML = canBuy ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
     const originalPriceHTML = canBuy && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
     const saleBadge = isDiscount ? `<span class="product-sale-badge">Sale</span>` : '';
-    const isAdmin = document.body.classList.contains('admin-preview');
     const actionOverlay = canBuy ? `
             <div class="product-overlay">
                 <button class="quick-add" onclick="event.stopPropagation();quickAdd(${p.id})">Quick Add</button>
             </div>` : '';
-    const adminEditButton = isShopPage && isAdmin ? `
-            <button class="admin-edit-btn" onclick="event.stopPropagation();openModal(${p.id})" aria-label="Edit product">Edit</button>` : '';
     const wishlistButton = `
             <button class="wishlist-btn" onclick="event.stopPropagation();toggleWishlist(this)" aria-label="Wishlist">
                 <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
@@ -144,7 +148,6 @@ function cardHTML(p) {
     <div class="product-card reveal" onclick="openModal(${p.id})">
         <div class="product-image" style="background:${p.bg}20;" role="button" tabindex="0" aria-label="View details for ${p.name}" onclick="event.stopPropagation();openModal(${p.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); openModal(${p.id}); }">
             ${productVisual}${actionOverlay}
-            ${adminEditButton}
             ${wishlistButton}
         </div>
         <div class="product-info">
