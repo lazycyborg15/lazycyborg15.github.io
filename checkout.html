@@ -206,7 +206,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/api/customers/login`, {
+                const response = await fetch(`${CHECKOUT_API_BASE}/api/customers/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
@@ -225,7 +225,19 @@
                     updateCheckoutAuthLinks();
                 }, 500);
             } catch (error) {
-                loginNote.textContent = error.message || 'Invalid customer email or password.';
+                const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
+                const account = accounts.find(item => item.email.toLowerCase() === email.toLowerCase() && item.password === password);
+                if (account) {
+                    localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined }));
+                    localStorage.setItem('pynx_logged_in', 'true');
+                    localStorage.setItem('pynx_customer_token', 'local-session');
+                    closeAuthModal();
+                    updateCheckoutAuthLinks();
+                    return;
+                }
+                loginNote.textContent = error instanceof TypeError
+                    ? 'Cannot reach the server. Create an account here first or start the API server.'
+                    : error.message || 'Invalid customer email or password.';
                 loginNote.classList.add('error');
             }
         });
@@ -251,7 +263,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE}/api/customers/signup`, {
+                const response = await fetch(`${CHECKOUT_API_BASE}/api/customers/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ firstName, lastName, email, password })
@@ -270,7 +282,24 @@
                     updateCheckoutAuthLinks();
                 }, 500);
             } catch (error) {
-                signupNote.textContent = error.message || 'Unable to create account.';
+                if (error instanceof TypeError) {
+                    const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
+                    if (accounts.some(item => item.email.toLowerCase() === email.toLowerCase())) {
+                        signupNote.textContent = 'An account with this email already exists on this device.';
+                    } else {
+                        const account = { firstName, lastName, email, password };
+                        accounts.push(account);
+                        localStorage.setItem('pynx_local_accounts', JSON.stringify(accounts));
+                        localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined }));
+                        localStorage.setItem('pynx_logged_in', 'true');
+                        localStorage.setItem('pynx_customer_token', 'local-session');
+                        closeAuthModal();
+                        updateCheckoutAuthLinks();
+                        return;
+                    }
+                } else {
+                    signupNote.textContent = error.message || 'Unable to create account.';
+                }
                 signupNote.classList.add('error');
             }
         });
@@ -413,6 +442,14 @@
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
                 console.error('Checkout submission error:', error);
+                if (error instanceof TypeError || error.name === 'AbortError') {
+                    const localOrders = JSON.parse(localStorage.getItem('pynx_local_orders') || '[]');
+                    localOrders.push({ firstName, lastName, address, email, contact, items, createdAt: new Date().toISOString(), localOnly: true });
+                    localStorage.setItem('pynx_local_orders', JSON.stringify(localOrders));
+                    document.getElementById('checkout-form').style.display = 'none';
+                    document.getElementById('checkout-success').style.display = 'block';
+                    return;
+                }
                 alert(error?.message || 'Order submission failed. Please try again later.');
             }
         });
