@@ -946,16 +946,16 @@
             transition: transform .4s var(--ease), filter .3s;
             user-select: none;
         }
-            .product-photo {
-                width: 100%;
-                height: 100%;
-                display: block;
-                object-fit: cover;
-                object-position: center;
-                transform: scale(var(--photo-zoom, 1));
-                transform-origin: center;
-                transition: transform .4s var(--ease);
-            }
+        .product-photo {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            object-position: center center;
+            transform: scale(var(--photo-zoom, 1));
+            transform-origin: center center;
+            transition: transform .4s var(--ease);
+        }
             .product-card:hover .product-photo { transform: scale(calc(var(--photo-zoom, 1) * 1.04)); }
         .product-card:hover .product-image .pi-inner {
             transform: scale(1.08);

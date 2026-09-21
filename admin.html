@@ -149,9 +149,8 @@
     const productCount = document.getElementById('product-count');
     const saleCount = document.getElementById('sale-count');
 
-    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
-        ? 'http://localhost:5000'
-        : '';
+    const API_BASE = window.PYNX_API_URL || (window.location.port === '5000' ? '' : '');
+    const IS_STATIC_HOST = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
 
     function getToken() {
         return localStorage.getItem('pynx_admin_token');
@@ -159,6 +158,12 @@
 
     function getApiUrl(path) {
         return `${API_BASE}${path}`;
+    }
+
+    function backendUnavailableMessage() {
+        return IS_STATIC_HOST
+            ? 'Admin API is not connected. Set window.PYNX_API_URL to your deployed server URL.'
+            : 'Cannot reach the admin API. Start the server on port 5000.';
     }
 
     function isHostedStaticMode() {
@@ -371,7 +376,7 @@
         } catch (error) {
             console.error(error);
             if (error.message.includes('Failed to fetch')) {
-                adminNote.textContent = 'Cannot reach backend. Make sure the server is running at http://localhost:5000.';
+                adminNote.textContent = backendUnavailableMessage();
                 adminNote.classList.add('error');
                 showLogin();
                 return;
@@ -726,7 +731,9 @@
             adminNote.classList.remove('error');
             await fetchOrders();
         } catch (error) {
-            adminNote.textContent = error.message || 'Invalid credentials.';
+            adminNote.textContent = error.message === 'Failed to fetch'
+                ? backendUnavailableMessage()
+                : error.message || 'Invalid credentials.';
             adminNote.classList.add('error');
         }
     });
