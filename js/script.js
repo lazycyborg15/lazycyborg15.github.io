@@ -3,24 +3,18 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-        { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#1a1a1a',
+                { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-one.png', bg: '#1a1a1a',
       desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
     sizes: ['S','M','L','XL'] },
-        { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black.jpeg', bg: '#c9b89a',
+                { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.png', bg: '#c9b89a',
       desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
     sizes: ['S','M','L','XL'] },
-        { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.jpeg', bg: '#3a3a3a',
+                { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-two.png', bg: '#3a3a3a',
       desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
     sizes: ['S','M','L','XL'] },
     // BIKINIS
-    { id: 4,  name: 'Minimal Triangle',  cat: 'Swimwear',  price: 89,  type: 'bikini', emoji: '👙', bg: '#1a1a1a',
-      desc: 'Triangle top with adjustable tie straps. Side-tie bottoms for a customisable fit. UPF 50+ chlorine-resistant fabric in deep black.',
-    sizes: ['S','M','L','XL'] },
-    { id: 5,  name: 'Classic Bandeau',   cat: 'Swimwear',  price: 99,  type: 'bikini', emoji: '👙', bg: '#e8e3d8',
-      desc: 'Strapless bandeau top with removable straps. Moderate coverage bottoms. Four-way stretch recycled nylon fabric.',
-    sizes: ['S','M','L','XL'] },
-    { id: 6,  name: 'High-Waist Set',    cat: 'Swimwear',  price: 129, type: 'bikini', emoji: '👙', bg: '#5a6475',
-      desc: 'High-waisted bottoms with a scoop front. Paired triangle top. PYNX tonal branding at the hip. Fully reversible.',
+        { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 89,  type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', imageScale: 1.35, bg: '#1a1a1a',
+            desc: 'Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.',
     sizes: ['S','M','L','XL'] },
 ];
 
@@ -157,7 +151,7 @@ function cardHTML(p) {
                 <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
             </button>`;
     const productVisual = p.image
-        ? `<img class="product-photo" src="${p.image}" alt="${p.name}">`
+        ? `<img class="product-photo" src="${p.image}" alt="${p.name}" style="--photo-zoom:${p.imageScale || 1};">`
         : `<div class="pi-inner" style="font-size:6rem;">${p.emoji}</div>`;
     return `
     <div class="product-card reveal" onclick="openModal(${p.id})">
@@ -186,7 +180,7 @@ function openModal(id, preselectedSize = null) {
     const canBuy = isShopPage || document.body.classList.contains('index-page');
 
     document.getElementById('modal-img').innerHTML = p.image
-        ? `<img class="product-photo" src="${p.image}" alt="${p.name}">`
+        ? `<img class="product-photo" src="${p.image}" alt="${p.name}" style="--photo-zoom:${p.imageScale || 1};">`
         : `<span>${p.emoji}</span>`;
     document.getElementById('modal-img').style.background = p.bg + '15';
     document.getElementById('modal-cat').textContent  = p.cat;

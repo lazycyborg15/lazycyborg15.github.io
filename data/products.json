@@ -7,7 +7,7 @@
     "originalPrice": 493,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-brown.jpeg",
+      "image": "assets/caps/pynx-vintage-cap-black-one.png",
     "bg": "#1a1a1a",
     "desc": "A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.",
     "sizes": [
@@ -27,7 +27,7 @@
     "originalPrice": 59,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-black.jpeg",
+      "image": "assets/caps/pynx-vintage-cap-blue.png",
     "bg": "#c9b89a",
     "desc": "Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.",
     "sizes": [
@@ -47,7 +47,7 @@
     "originalPrice": 79,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-blue.jpeg",
+      "image": "assets/caps/pynx-vintage-cap-black-two.png",
     "bg": "#3a3a3a",
     "desc": "Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.",
     "sizes": [
@@ -59,50 +59,16 @@
   },
   {
     "id": 4,
-    "name": "Minimal Triangle",
+      "name": "Pynx Star Bikini Set",
     "cat": "Swimwear",
     "price": 89,
     "originalPrice": 89,
     "type": "bikini",
     "emoji": "👙",
+      "image": "assets/bikinis/pynx-star-bikini-set.png",
+      "imageScale": 1.35,
     "bg": "#1a1a1a",
-    "desc": "Triangle top with adjustable tie straps. Side-tie bottoms for a customisable fit. UPF 50+ chlorine-resistant fabric in deep black.",
-    "sizes": [
-      "XS",
-      "S",
-      "M",
-      "L"
-    ],
-    "onSale": false
-  },
-  {
-    "id": 5,
-    "name": "Classic Bandeau",
-    "cat": "Swimwear",
-    "price": 99,
-    "originalPrice": 99,
-    "type": "bikini",
-    "emoji": "👙",
-    "bg": "#e8e3d8",
-    "desc": "Strapless bandeau top with removable straps. Moderate coverage bottoms. Four-way stretch recycled nylon fabric.",
-    "sizes": [
-      "XS",
-      "S",
-      "M",
-      "L"
-    ],
-    "onSale": false
-  },
-  {
-    "id": 6,
-    "name": "High-Waist Set",
-    "cat": "Swimwear",
-    "price": 129,
-    "originalPrice": 129,
-    "type": "bikini",
-    "emoji": "👙",
-    "bg": "#5a6475",
-    "desc": "High-waisted bottoms with a scoop front. Paired triangle top. PYNX tonal branding at the hip. Fully reversible.",
+      "desc": "Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.",
     "sizes": [
       "XS",
       "S",

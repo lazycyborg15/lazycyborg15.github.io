@@ -910,7 +910,8 @@
         /* ── PRODUCT GRID ── */
         .product-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px,400px));
+            justify-content: center;
             gap: 2px;
             max-width: 1200px;
             margin: 0 auto;
@@ -950,9 +951,12 @@
                 height: 100%;
                 display: block;
                 object-fit: cover;
+                object-position: center;
+                transform: scale(var(--photo-zoom, 1));
+                transform-origin: center;
                 transition: transform .4s var(--ease);
             }
-            .product-card:hover .product-photo { transform: scale(1.04); }
+            .product-card:hover .product-photo { transform: scale(calc(var(--photo-zoom, 1) * 1.04)); }
         .product-card:hover .product-image .pi-inner {
             transform: scale(1.08);
             filter: grayscale(.6) opacity(.2);
@@ -2608,15 +2612,21 @@
         .modal-img {
             background: var(--bg);
             display: flex; align-items: center; justify-content: center;
-            padding: 3rem;
+            position: relative;
+            overflow: hidden;
             font-size: 8rem;
             min-height: 360px;
         }
+            .modal-img span { padding: 3rem; }
             .modal-img .product-photo {
-                width: calc(100% + 6rem);
-                height: calc(100% + 6rem);
-                min-height: 360px;
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
                 object-fit: cover;
+                object-position: center;
+                transform: scale(var(--photo-zoom, 1));
+                transform-origin: center;
             }
         .modal-info {
             padding: 2.5rem;
@@ -2801,7 +2811,8 @@
             .menu-toggle { display: flex; }
             .footer-grid { grid-template-columns: 1fr 1fr; }
             .modal-box { grid-template-columns: 1fr; }
-            .modal-img { min-height: 200px; font-size: 5rem; padding: 2rem; }
+            .modal-img { min-height: 200px; font-size: 5rem; }
+            .modal-img span { padding: 2rem; }
         }
         @media (max-width: 600px) {
             header { padding: 0 1.2rem; }
