@@ -69,21 +69,21 @@ function saveWishlist() {
     }
 }
 
-const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+const API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
     ? 'http://localhost:5000'
-    : '';
+    : '');
 
 /* ────────────────────────────────────────
    RENDER PRODUCT GRIDS
 ──────────────────────────────────────── */
 async function loadProductCatalog() {
     try {
-        const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
+        const response = await fetch(getApiUrl(`/api/products?updated=${Date.now()}`), { cache: 'no-store' });
         if (!response.ok) throw new Error('Product catalog not available');
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.products;
         if (Array.isArray(data) && data.length) {
-            const overrides = loadProductOverrides();
-            PRODUCTS = data.map(product => overrides[product.id] ? { ...product, ...overrides[product.id] } : product);
+            PRODUCTS = data;
             let cartChanged = false;
             cart = cart.map(item => {
                 const currentProduct = PRODUCTS.find(product => product.id === item.product?.id);
@@ -94,28 +94,15 @@ async function loadProductCatalog() {
             if (cartChanged) saveCart();
         }
     } catch (err) {
-        console.warn('Unable to load product catalog from products.json, using built-in data.', err);
+        try {
+            const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (Array.isArray(data) && data.length) PRODUCTS = data;
+        } catch (fallbackError) {
+            console.warn('Unable to load the product catalog.', fallbackError);
+        }
     }
 }
-
-function loadProductOverrides() {
-    try {
-        return JSON.parse(localStorage.getItem('pynx_product_overrides') || '{}');
-    } catch (err) {
-        console.error('Failed to parse product overrides:', err);
-        return {};
-    }
-}
-
-// Reflect admin discount changes made in another tab without requiring a manual reload.
-window.addEventListener('storage', function (e) {
-    if (e.key === 'pynx_product_overrides') {
-        loadProductCatalog().finally(() => {
-            renderProducts();
-            if (typeof renderShopCollections === 'function') renderShopCollections();
-        });
-    }
-});
 
 function renderProducts() {
     const capsGrid = document.getElementById('caps-grid');
@@ -139,7 +126,7 @@ function cardHTML(p) {
     const priceHTML = canBuy ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
     const originalPriceHTML = canBuy && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
     const saleBadge = isDiscount ? `<span class="product-sale-badge">Sale</span>` : '';
-    const isAdmin = Boolean(localStorage.getItem('pynx_admin_token'));
+    const isAdmin = document.body.classList.contains('admin-preview');
     const actionOverlay = canBuy ? `
             <div class="product-overlay">
                 <button class="quick-add" onclick="event.stopPropagation();quickAdd(${p.id})">Quick Add</button>
@@ -195,7 +182,7 @@ function openModal(id, preselectedSize = null) {
     const adminPriceInput = document.getElementById('admin-edit-price');
     const adminOriginalInput = document.getElementById('admin-edit-original');
     const adminOnSaleInput = document.getElementById('admin-edit-onsale');
-    const isAdmin = Boolean(localStorage.getItem('pynx_admin_token'));
+    const isAdmin = document.body.classList.contains('admin-preview');
 
     modalPriceEl.textContent = `₱${p.price}.00`;
     modalPriceEl.style.display = '';

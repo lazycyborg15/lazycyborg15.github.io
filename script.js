@@ -3,23 +3,23 @@
 ──────────────────────────────────────── */
 const PRODUCTS = [
     // CAPS
-    { id: 1,  name: 'Classic Snapback',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', bg: '#1a1a1a',
+    { id: 1,  name: 'Classic Snapback',  cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#1a1a1a',
       desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
       sizes: ['XS','S','M','L','XL'] },
-    { id: 2,  name: 'Athletic Fit',      cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', bg: '#c9b89a',
+    { id: 2,  name: 'Athletic Fit',      cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#c9b89a',
       desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
       sizes: ['XS','S','M','L','XL'] },
-    { id: 3,  name: 'Premium Wool',      cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', bg: '#3a3a3a',
+    { id: 3,  name: 'Premium Wool',      cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#3a3a3a',
       desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
       sizes: ['S','M','L'] },
     // BIKINIS
-    { id: 4,  name: 'Minimal Triangle',  cat: 'Swimwear',  price: 89,  type: 'bikini', emoji: '👙', bg: '#1a1a1a',
+    { id: 4,  name: 'Minimal Triangle',  cat: 'Swimwear',  price: 569,  type: 'bikini', emoji: '👙', bg: '#1a1a1a',
       desc: 'Triangle top with adjustable tie straps. Side-tie bottoms for a customisable fit. UPF 50+ chlorine-resistant fabric in deep black.',
       sizes: ['XS','S','M','L'] },
-    { id: 5,  name: 'Classic Bandeau',   cat: 'Swimwear',  price: 99,  type: 'bikini', emoji: '👙', bg: '#e8e3d8',
+    { id: 5,  name: 'Classic Bandeau',   cat: 'Swimwear',  price: 569,  type: 'bikini', emoji: '👙', bg: '#e8e3d8',
       desc: 'Strapless bandeau top with removable straps. Moderate coverage bottoms. Four-way stretch recycled nylon fabric.',
       sizes: ['XS','S','M','L'] },
-    { id: 6,  name: 'High-Waist Set',    cat: 'Swimwear',  price: 129, type: 'bikini', emoji: '👙', bg: '#5a6475',
+    { id: 6,  name: 'High-Waist Set',    cat: 'Swimwear',  price: 569, type: 'bikini', emoji: '👙', bg: '#5a6475',
       desc: 'High-waisted bottoms with a scoop front. Paired triangle top. PYNX tonal branding at the hip. Fully reversible.',
       sizes: ['XS','S','M','L'] },
 ];

@@ -8,8 +8,8 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const ORDERS_FILE = path.join(__dirname, '../orders.json');
-const CONTACTS_FILE = path.join(__dirname, '../contacts.json');
+const ORDERS_FILE = path.join(__dirname, '../data/orders.json');
+const CONTACTS_FILE = path.join(__dirname, '../data/contacts.json');
 const PRODUCTS_FILE = path.join(__dirname, '../data/products.json');
 const CUSTOMERS_FILE = path.join(__dirname, '../data/customers.json');
 
@@ -181,12 +181,14 @@ app.post('/api/orders', async (req, res) => {
   }
 
   const order = {
+    id: crypto.randomUUID(),
     firstName,
     lastName,
     address,
     email,
     contact,
     items,
+    total: items.reduce((sum, item) => sum + (Number(item.product?.price) || 0) * (Number(item.qty) || 0), 0),
     createdAt: new Date().toISOString(),
   };
 
@@ -227,6 +229,17 @@ app.post('/api/orders', async (req, res) => {
   }
 
   return res.status(201).json({ success: true, order, emailSent, emailError });
+});
+
+// The public catalog is read from the same persistent store that admins edit.
+app.get('/api/products', (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    return res.json({ success: true, products: loadProducts() });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to load products.' });
+  }
 });
 
 app.post('/api/contact', async (req, res) => {

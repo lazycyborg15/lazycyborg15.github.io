@@ -265,11 +265,6 @@
             return;
         }
 
-        if (token === 'local-admin-session') {
-            renderLocalOrders();
-            return;
-        }
-
         try {
             const response = await fetch(getApiUrl('/api/admin/orders'), {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -576,18 +571,6 @@
         localStorage.setItem(PRODUCT_OVERRIDES_KEY, JSON.stringify(overrides));
     }
 
-    function isLocalProductMode() {
-        return getToken() === 'local-admin-session';
-    }
-
-    async function loadLocalProducts() {
-        const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error('Product catalog not available.');
-        const base = await response.json();
-        const overrides = loadProductOverrides();
-        return base.map(product => (overrides[product.id] ? { ...product, ...overrides[product.id] } : product));
-    }
-
     function renderProductsList(products) {
         productsStatus.textContent = 'Editable products loaded.';
         productsStatus.classList.remove('error');
@@ -632,18 +615,6 @@
             return;
         }
 
-        if (isLocalProductMode()) {
-            try {
-                const products = await loadLocalProducts();
-                renderProductsList(products);
-            } catch (error) {
-                productsStatus.textContent = error.message || 'Unable to load products.';
-                productsStatus.classList.add('error');
-                productsList.innerHTML = '<div class="empty-state-card">Products cannot be loaded right now.</div>';
-            }
-            return;
-        }
-
         try {
             const response = await fetch(`${getApiUrl('/api/admin/products')}?updated=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -668,16 +639,6 @@
 
         if (!token) {
             showLogin();
-            return;
-        }
-
-        if (isLocalProductMode()) {
-            const overrides = loadProductOverrides();
-            overrides[productId] = { price, originalPrice, onSale };
-            saveProductOverrides(overrides);
-            productsStatus.textContent = 'Product saved on this device.';
-            productsStatus.classList.remove('error');
-            fetchProducts();
             return;
         }
 
@@ -715,16 +676,6 @@
         // Removing a discount automatically restores the original price.
         const price = makeSale ? Number(priceEl ? priceEl.value : 0) : originalPrice;
 
-        if (isLocalProductMode()) {
-            const overrides = loadProductOverrides();
-            overrides[productId] = { price, originalPrice, onSale: Boolean(makeSale) };
-            saveProductOverrides(overrides);
-            productsStatus.textContent = makeSale ? 'Marked as discounted on this device.' : 'Discount removed; price restored on this device.';
-            productsStatus.classList.remove('error');
-            fetchProducts();
-            return;
-        }
-
         try {
             productsStatus.textContent = makeSale ? 'Marking as discounted...' : 'Removing discount...';
             const response = await fetch(getApiUrl(`/api/admin/products/${productId}`), {
@@ -760,17 +711,6 @@
         }
 
         try {
-            if (isHostedStaticMode()) {
-                if (email !== 'admin@pynx.com' || password !== 'PYNX2026!') {
-                    throw new Error('Use the hosted demo admin credentials: admin@pynx.com / PYNX2026!');
-                }
-                localStorage.setItem('pynx_admin_token', 'local-admin-session');
-                adminNote.textContent = 'Local admin mode. Start the API server to save changes and load orders.';
-                adminNote.classList.remove('error');
-                await fetchOrders();
-                return;
-            }
-
             const response = await fetch(getApiUrl('/api/admin/login'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -786,13 +726,6 @@
             adminNote.classList.remove('error');
             await fetchOrders();
         } catch (error) {
-            if (email === 'admin@pynx.com' && password === 'PYNX2026!') {
-                localStorage.setItem('pynx_admin_token', 'local-admin-session');
-                adminNote.textContent = 'Local admin mode. Start the API server to save changes and load orders.';
-                adminNote.classList.remove('error');
-                await fetchOrders();
-                return;
-            }
             adminNote.textContent = error.message || 'Invalid credentials.';
             adminNote.classList.add('error');
         }

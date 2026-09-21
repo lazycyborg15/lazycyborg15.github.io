@@ -35,12 +35,17 @@ npm start
 
 The React app will run in development mode and the Express server will run on port `5000`.
 
-## Server notes
+## Shared data and second-device testing
 
 - The Express server is in `/server`
-- MongoDB connection string is controlled by `MONGO_URI`
-- API endpoint: `POST /api/orders`
+- Product prices and discounts are stored in `/data/products.json`.
+- Orders are stored in `/data/orders.json` and are available to the authenticated admin dashboard.
+- Public product data is served by `GET /api/products`; orders are submitted through `POST /api/orders`.
 - Health check: `GET /api/health`
+- Start the server on the shop computer with `node server/index.js`.
+- On another device connected to the same network, open the shop using the shop computer's LAN address, for example `http://192.168.1.20:5000`.
+
+GitHub Pages can serve the storefront files, but it cannot run this API or share JSON data between devices. For production cross-device orders, deploy the Express server and use its public URL through `window.PYNX_API_URL`.
 
 ## Static site fallback
 

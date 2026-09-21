@@ -285,9 +285,9 @@
     <footer>
     <script>
         // Renamed to avoid clashing with the global API_BASE declared in js/script.js.
-        const CHECKOUT_API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+        const CHECKOUT_API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
             ? 'http://localhost:5000'
-            : '';
+            : '');
 
         function getApiUrl(path) {
             return `${CHECKOUT_API_BASE}${path}`;
@@ -387,13 +387,6 @@
                 return;
             }
 
-            if (isHostedStaticMode()) {
-                saveLocalOrder({ firstName, lastName, address, email, contact, items });
-                document.getElementById('checkout-form').style.display = 'none';
-                document.getElementById('checkout-success').style.display = 'block';
-                return;
-            }
-
             try {
                 const response = await fetch(getApiUrl('/api/orders'), {
                     method: 'POST',
@@ -419,12 +412,6 @@
                 document.getElementById('checkout-form').style.display = 'none';
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
-                if (error instanceof TypeError || error.name === 'AbortError') {
-                    saveLocalOrder({ firstName, lastName, address, email, contact, items });
-                    document.getElementById('checkout-form').style.display = 'none';
-                    document.getElementById('checkout-success').style.display = 'block';
-                    return;
-                }
                 console.error('Checkout submission error:', error);
                 alert(error?.message || 'Order submission failed. Please try again later.');
             }
