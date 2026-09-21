@@ -945,6 +945,14 @@
             transition: transform .4s var(--ease), filter .3s;
             user-select: none;
         }
+            .product-photo {
+                width: 100%;
+                height: 100%;
+                display: block;
+                object-fit: cover;
+                transition: transform .4s var(--ease);
+            }
+            .product-card:hover .product-photo { transform: scale(1.04); }
         .product-card:hover .product-image .pi-inner {
             transform: scale(1.08);
             filter: grayscale(.6) opacity(.2);
@@ -2604,6 +2612,12 @@
             font-size: 8rem;
             min-height: 360px;
         }
+            .modal-img .product-photo {
+                width: calc(100% + 6rem);
+                height: calc(100% + 6rem);
+                min-height: 360px;
+                object-fit: cover;
+            }
         .modal-info {
             padding: 2.5rem;
             overflow-y: auto;

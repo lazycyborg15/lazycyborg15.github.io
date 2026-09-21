@@ -3,13 +3,13 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-    { id: 1,  name: 'Classic Snapback',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', bg: '#1a1a1a',
+        { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#1a1a1a',
       desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
     sizes: ['S','M','L','XL'] },
-    { id: 2,  name: 'Athletic Fit',      cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', bg: '#c9b89a',
+        { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black.jpeg', bg: '#c9b89a',
       desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
     sizes: ['S','M','L','XL'] },
-    { id: 3,  name: 'Premium Wool',      cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', bg: '#3a3a3a',
+        { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.jpeg', bg: '#3a3a3a',
       desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
     sizes: ['S','M','L','XL'] },
     // BIKINIS
@@ -156,10 +156,13 @@ function cardHTML(p) {
             <button class="wishlist-btn" onclick="event.stopPropagation();toggleWishlist(this)" aria-label="Wishlist">
                 <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
             </button>`;
+    const productVisual = p.image
+        ? `<img class="product-photo" src="${p.image}" alt="${p.name}">`
+        : `<div class="pi-inner" style="font-size:6rem;">${p.emoji}</div>`;
     return `
     <div class="product-card reveal" onclick="openModal(${p.id})">
         <div class="product-image" style="background:${p.bg}20;" role="button" tabindex="0" aria-label="View details for ${p.name}" onclick="event.stopPropagation();openModal(${p.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); openModal(${p.id}); }">
-            <div class="pi-inner" style="font-size:6rem;">${p.emoji}</div>${actionOverlay}
+            ${productVisual}${actionOverlay}
             ${adminEditButton}
             ${wishlistButton}
         </div>
@@ -182,7 +185,9 @@ function openModal(id, preselectedSize = null) {
     const isShopPage = document.body.classList.contains('shop-page');
     const canBuy = isShopPage || document.body.classList.contains('index-page');
 
-    document.getElementById('modal-img').innerHTML   = `<span>${p.emoji}</span>`;
+    document.getElementById('modal-img').innerHTML = p.image
+        ? `<img class="product-photo" src="${p.image}" alt="${p.name}">`
+        : `<span>${p.emoji}</span>`;
     document.getElementById('modal-img').style.background = p.bg + '15';
     document.getElementById('modal-cat').textContent  = p.cat;
     document.getElementById('modal-name').textContent = p.name;

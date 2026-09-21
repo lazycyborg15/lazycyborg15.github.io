@@ -1,12 +1,13 @@
 [
   {
     "id": 1,
-    "name": "Classic Snapback",
+    "name": "Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear",
     "cat": "Headwear",
     "price": 493,
     "originalPrice": 493,
     "type": "cap",
     "emoji": "🧢",
+      "image": "assets/caps/pynx-vintage-cap-brown.jpeg",
     "bg": "#1a1a1a",
     "desc": "A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.",
     "sizes": [
@@ -20,12 +21,13 @@
   },
   {
     "id": 2,
-    "name": "Athletic Fit",
+      "name": "Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear",
     "cat": "Headwear",
     "price": 59,
     "originalPrice": 59,
     "type": "cap",
     "emoji": "🧢",
+      "image": "assets/caps/pynx-vintage-cap-black.jpeg",
     "bg": "#c9b89a",
     "desc": "Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.",
     "sizes": [
@@ -39,12 +41,13 @@
   },
   {
     "id": 3,
-    "name": "Premium Wool",
+      "name": "Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear",
     "cat": "Headwear",
     "price": 79,
     "originalPrice": 79,
     "type": "cap",
     "emoji": "🧢",
+      "image": "assets/caps/pynx-vintage-cap-blue.jpeg",
     "bg": "#3a3a3a",
     "desc": "Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.",
     "sizes": [
