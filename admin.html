@@ -129,6 +129,7 @@
         </div>
     </section>
 </main>
+<script src="js/config.js"></script>
 <script>
     const loginView = document.getElementById('login-view');
     const adminDashboard = document.getElementById('admin-dashboard');
@@ -366,59 +367,15 @@
 
     async function fetchContacts() {
         const token = getToken();
-        const localContacts = loadLocalContacts();
-        let contacts = localContacts.slice();
-        let statusMessage = 'Customer concerns are displayed below.';
-        let statusError = false;
-
         if (!token || token === 'local-admin-session') {
-            // If not logged in to a real backend, show local submissions only
-            contactsStatus.textContent = 'Showing customer concerns saved on this device.';
-            contactsStatus.classList.remove('error');
-            document.getElementById('concerns-count').textContent = `${contacts.length} concern(s)`;
-            document.getElementById('last-concern-time').textContent = contacts.length > 0 ? new Date(contacts[0].createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No data';
-            contactsList.innerHTML = contacts.map((contact, index) => {
-                const submittedDate = new Date(contact.createdAt).toLocaleString();
-                return `<div class="concern-card">
-                    <div class="concern-card-header">
-                        <span class="concern-number">Message #${index+1}</span>
-                        <span class="concern-status-badge">Received</span>
-                    </div>
-                    <div class="concern-card-body">
-                        <div class="concern-info-section">
-                            <div class="concern-info-row">
-                                <label>Name:</label>
-                                <span>${contact.name}</span>
-                            </div>
-                            <div class="concern-info-row">
-                                <label>Email:</label>
-                                <span><a href="mailto:${contact.email}">${contact.email}</a></span>
-                            </div>
-                            <div class="concern-info-row">
-                                <label>Phone:</label>
-                                <span>${contact.phone || '—'}</span>
-                            </div>
-                        </div>
-                        <div class="concern-divider"></div>
-                        <div class="concern-message-section">
-                            <label class="message-label">Message:</label>
-                            <p class="concern-message-text">${contact.message}</p>
-                        </div>
-                        <div class="concern-divider"></div>
-                        <div class="concern-footer-section">
-                            <div class="concern-info-row">
-                                <label>Submitted:</label>
-                                <span>${submittedDate}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-            if (contacts.length === 0) {
-                contactsList.innerHTML = '<div class="empty-state-card">No customer concerns yet.</div>';
-            }
+            contactsStatus.textContent = 'Connect the deployed API to load shared customer concerns.';
+            contactsStatus.classList.add('error');
+            document.getElementById('concerns-count').textContent = 'API required';
+            contactsList.innerHTML = '<div class="empty-state-card">Shared customer concerns are unavailable until the API is connected.</div>';
             return;
         }
+
+        let contacts = [];
 
         try {
             const response = await fetch(getApiUrl('/api/admin/contacts'), {

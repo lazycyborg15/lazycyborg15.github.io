@@ -47,6 +47,21 @@ The React app will run in development mode and the Express server will run on po
 
 GitHub Pages can serve the storefront files, but it cannot run this API or share JSON data between devices. For production cross-device orders, deploy the Express server and use its public URL through `window.PYNX_API_URL`.
 
+### Deploy the shared API
+
+1. Create a new Web Service on Render and connect this repository.
+2. Set the root directory to `server`.
+3. Set the build command to `npm install`.
+4. Set the start command to `npm start`.
+5. Add environment variables: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `CORS_ORIGIN`.
+6. After deployment, copy the Render URL into `js/config.js`:
+
+```js
+window.PYNX_API_URL = 'https://your-service.onrender.com';
+```
+
+The same API URL must be used by the storefront and admin page. Contact messages, orders, product prices, and discounts will then use the shared API instead of browser storage. For data that must survive server restarts or redeploys, replace the JSON files with MongoDB or attach persistent storage to the hosting service.
+
 ## Static site fallback
 
 The existing root HTML pages remain in place and now reference organized asset folders for CSS, JS, and logos.

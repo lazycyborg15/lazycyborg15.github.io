@@ -46,13 +46,14 @@
 
     </section>
 </main>
+<script src="js/config.js"></script>
 <script src="js/admin-link.js"></script>
 <script>
     const loginForm = document.getElementById('login-form');
     const loginNote = document.getElementById('login-note');
-    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+    const API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
         ? 'http://localhost:5000'
-        : '';
+        : '');
     const returnPage = new URLSearchParams(window.location.search).get('return');
     const createAccountLink = document.querySelector('.auth-switch a[href="signup.html"]');
     if (createAccountLink && returnPage === 'checkout.html') {

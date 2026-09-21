@@ -49,14 +49,15 @@
         </div>
     </section>
 </main>
+<script src="js/config.js"></script>
 <script src="js/admin-link.js"></script>
 <script>
     const signupForm = document.getElementById('signup-form');
     const signupNote = document.getElementById('signup-note');
 
-    const API_BASE = window.location.protocol === 'file:' || window.location.port !== '5000'
+    const API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
         ? 'http://localhost:5000'
-        : '';
+        : '');
     const returnPage = new URLSearchParams(window.location.search).get('return');
 
     function saveLocalAccount(account) {

@@ -80,9 +80,10 @@
         </form>
     </section>
 </main>
+    <script src="js/config.js"></script>
     <script src="js/script.js"></script>
     <script>
-        const CONTACT_API_BASE = window.location.protocol === 'file:' ? 'http://localhost:5000' : '';
+        const CONTACT_API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' ? 'http://localhost:5000' : '');
         const contactForm = document.getElementById('contact-form');
         const formSuccess = document.getElementById('form-success');
 
@@ -144,7 +145,6 @@
                 createdAt: new Date().toISOString(),
             };
 
-            let backendSuccess = false;
             try {
                 const response = await fetch(`${CONTACT_API_BASE}/api/contact`, {
                     method: 'POST',
@@ -155,7 +155,6 @@
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Unable to submit your message.');
                 }
-                backendSuccess = true;
             } catch (err) {
                 console.error('Contact submit failed:', err);
                 showToast('Message saved locally. It will appear in admin view when backend is available.');
