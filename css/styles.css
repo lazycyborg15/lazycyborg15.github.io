@@ -671,35 +671,6 @@
             isolation: isolate;
         }
 
-        .index-page .hero-center::before {
-            content: '';
-            position: absolute;
-            width: clamp(230px, 34vw, 460px);
-            aspect-ratio: 1;
-            border-radius: 50%;
-            background-image:
-                linear-gradient(rgba(240,240,235,.58), rgba(240,240,235,.58)),
-                url('https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNW16N2dobW9vdDlwbnlzbTIzaWN5NzB5Y2hlOTVvYnY1NHJzZ3A5ZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AjtlgMQzf58AajghW/giphy.gif');
-            background-size: cover;
-            background-position: center;
-            background-blend-mode: screen;
-            filter: grayscale(1) contrast(.85);
-            opacity: .46;
-            mix-blend-mode: multiply;
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        .index-page .hero-center::after {
-            content: '';
-            position: absolute;
-            inset: 8%;
-            border: 1px solid rgba(17,17,17,.08);
-            border-radius: 50%;
-            z-index: -1;
-            pointer-events: none;
-        }
-
         .shop-page .hero-content {
             padding-top: 16px;
             transform: translateY(-4px);
