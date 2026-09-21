@@ -361,11 +361,14 @@
                 const lineTotal = price * quantity;
                 subtotal += lineTotal;
                 const size = item.size ? ` <span class="checkout-item-size">(${item.size})</span>` : '';
+                const productImage = item.product?.image
+                    ? `<img src="${item.product.image}" alt="${item.product?.name || 'Product'}">`
+                    : (item.product?.emoji || '');
 
                 return `
                     <div class="checkout-item">
                         <div class="checkout-item-thumb" style="background:${item.product?.bg || '#f0f0eb'}20;" role="img" aria-label="${item.product?.name || 'Product'}">
-                            ${item.product?.emoji || ''}
+                            ${productImage}
                         </div>
                         <div class="checkout-item-details">
                             <strong>${item.product?.name || 'Product'}</strong>${size}
@@ -402,6 +405,10 @@
                     price: item.product?.price,
                     originalPrice: item.product?.originalPrice || item.product?.price,
                     onSale: Boolean(item.product?.onSale),
+                    image: item.product?.image || '',
+                    imageScale: item.product?.imageScale || 1,
+                    bg: item.product?.bg || '#f0f0eb',
+                    emoji: item.product?.emoji || '',
                 },
                 qty: item.qty,
                 size: item.size || '',
