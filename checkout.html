@@ -448,7 +448,7 @@
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
                 console.error('Checkout submission error:', error);
-                if (error instanceof TypeError || error.name === 'AbortError') {
+                if (error instanceof TypeError || error.name === 'AbortError' || /Unexpected response/.test(error?.message || '')) {
                     alert('We could not reach the store server, so your order was not placed. Please try again in a moment.');
                     return;
                 }
