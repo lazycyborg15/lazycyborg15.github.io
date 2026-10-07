@@ -103,7 +103,7 @@
                 return;
             }
 
-            if (error instanceof TypeError) {
+            if (error instanceof TypeError || error instanceof SyntaxError) {
                 loginNote.textContent = 'No local account matched. Start the server or create an account on this device.';
             } else {
                 loginNote.textContent = error.message || 'Invalid customer email or password.';

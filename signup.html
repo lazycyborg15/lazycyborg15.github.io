@@ -110,7 +110,7 @@
                 window.location.href = returnPage === 'checkout.html' ? 'checkout.html' : 'index.html';
             }, 800);
         } catch (error) {
-            if (error instanceof TypeError) {
+            if (error instanceof TypeError || error instanceof SyntaxError) {
                 try {
                     const account = {
                         id: `local-${Date.now()}`,

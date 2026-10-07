@@ -236,7 +236,7 @@
                     updateCheckoutAuthLinks();
                     return;
                 }
-                loginNote.textContent = error instanceof TypeError
+                loginNote.textContent = error instanceof TypeError || error instanceof SyntaxError
                     ? 'Cannot reach the server. Create an account here first or start the API server.'
                     : error.message || 'Invalid customer email or password.';
                 loginNote.classList.add('error');
@@ -283,7 +283,7 @@
                     updateCheckoutAuthLinks();
                 }, 500);
             } catch (error) {
-                if (error instanceof TypeError) {
+                if (error instanceof TypeError || error instanceof SyntaxError) {
                     const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
                     if (accounts.some(item => item.email.toLowerCase() === email.toLowerCase())) {
                         signupNote.textContent = 'An account with this email already exists on this device.';
