@@ -11,6 +11,13 @@ const PORT = process.env.PORT || 5000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const SEED_DIR = path.join(__dirname, '../data');
 const MONGODB_URI = process.env.MONGODB_URI || '';
+const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
+
+// Default records bundled by the serverless wrapper (the filesystem is not available there).
+let SEEDS = {};
+function setSeeds(seeds) {
+  SEEDS = seeds || {};
+}
 
 // Storage is JSON files by default. When MONGODB_URI is set, each collection is
 // kept in MongoDB instead so data survives redeploys on hosts with ephemeral disks.
@@ -36,7 +43,7 @@ async function loadCollection(name) {
   if (StoreModel) {
     const doc = await StoreModel.findById(name).lean();
     if (doc) return doc.data || [];
-    return readJsonFile(path.join(SEED_DIR, name + '.json')) || [];
+    return SEEDS[name] || readJsonFile(path.join(SEED_DIR, name + '.json')) || [];
   }
   return readJsonFile(path.join(DATA_DIR, name + '.json')) || readJsonFile(path.join(SEED_DIR, name + '.json')) || [];
 }
@@ -52,6 +59,19 @@ async function saveCollection(name, items) {
 
 const loadOrders = () => loadCollection('orders');
 const saveOrders = orders => saveCollection('orders', orders);
+
+// Appends a single record. MongoDB does it atomically so parallel serverless instances never overwrite each other.
+async function appendItem(name, item) {
+  if (StoreModel) {
+    await StoreModel.updateOne({ _id: name }, { $push: { data: item } }, { upsert: true });
+    return;
+  }
+  await withLock(async () => {
+    const items = await loadCollection(name);
+    items.push(item);
+    await saveCollection(name, items);
+  });
+}
 const loadContacts = () => loadCollection('contacts');
 const saveContacts = contacts => saveCollection('contacts', contacts);
 const loadProducts = () => loadCollection('products');
@@ -96,6 +116,30 @@ app.use((req, res, next) => {
   }
   next();
 });
+let dbConnection = null;
+function connectDb() {
+  if (!MONGODB_URI) return Promise.resolve();
+  if (!dbConnection) {
+    dbConnection = require('mongoose').connect(MONGODB_URI, { serverSelectionTimeoutMS: 8000 })
+      .catch(err => { dbConnection = null; throw err; });
+  }
+  return dbConnection;
+}
+
+// The connection is cached across requests; serverless hosts reuse warm instances.
+app.use('/api', async (req, res, next) => {
+  if (IS_SERVERLESS && !MONGODB_URI) {
+    return res.status(503).json({ success: false, message: 'The database is not configured. Set MONGODB_URI on the host.' });
+  }
+  try {
+    await connectDb();
+    next();
+  } catch (err) {
+    console.error('Database connection failed:', err);
+    res.status(503).json({ success: false, message: 'Cannot reach the database right now. Please try again shortly.' });
+  }
+});
+
 app.use(express.static(path.join(__dirname, '../')));
 app.use(express.static(path.join(__dirname, '../client/build')));
 
@@ -205,11 +249,7 @@ app.post('/api/orders', async (req, res) => {
   };
 
   try {
-    await withLock(async () => {
-      const orders = await loadOrders();
-      orders.push(order);
-      await saveOrders(orders);
-    });
+    await appendItem('orders', order);
   } catch (error) {
     console.error('Failed to save order:', error);
     return res.status(500).json({ success: false, message: 'Order save failed. Please try again later.' });
@@ -255,11 +295,7 @@ app.post('/api/contact', async (req, res) => {
   };
 
   try {
-    await withLock(async () => {
-      const contacts = await loadContacts();
-      contacts.push(contactEntry);
-      await saveContacts(contacts);
-    });
+    await appendItem('contacts', contactEntry);
   } catch (error) {
     console.error('Failed to save contact message:', error);
     return res.status(500).json({ success: false, message: 'Unable to save your message. Please try again later.' });
@@ -292,11 +328,7 @@ app.post('/api/reviews', async (req, res) => {
   };
 
   try {
-    await withLock(async () => {
-      const reviews = await loadReviews();
-      reviews.push(review);
-      await saveReviews(reviews);
-    });
+    await appendItem('reviews', review);
   } catch (error) {
     console.error('Failed to save review:', error);
     return res.status(500).json({ success: false, message: 'Unable to save your review. Please try again later.' });
@@ -437,16 +469,18 @@ app.get('*', (req, res) => {
 });
 
 async function start() {
-  if (MONGODB_URI) {
-    await require('mongoose').connect(MONGODB_URI);
-    console.log('Connected to MongoDB');
-  }
+  await connectDb();
+  if (MONGODB_URI) console.log('Connected to MongoDB');
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-start().catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { app, setSeeds };

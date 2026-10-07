@@ -189,9 +189,12 @@
     }
 
     function backendUnavailableMessage() {
-        return IS_STATIC_HOST
-            ? 'Admin API is not connected. Set window.PYNX_API_URL to your deployed server URL.'
-            : 'Cannot reach the admin API. Start the server on port 5000.';
+        if (IS_STATIC_HOST) {
+            return 'Admin API is not connected. Set window.PYNX_API_URL to your deployed server URL.';
+        }
+        return window.PYNX_API_BASE
+            ? 'Cannot reach the admin API. Start the server on port 5000.'
+            : 'Cannot reach the admin API right now. Check the site deployment and database settings.';
     }
 
     function isHostedStaticMode() {
