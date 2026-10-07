@@ -69,9 +69,7 @@ function saveWishlist() {
     }
 }
 
-const API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
-    ? 'http://localhost:5000'
-    : '');
+const API_BASE = window.PYNX_API_BASE;
 
 /* ────────────────────────────────────────
    RENDER PRODUCT GRIDS
@@ -162,10 +160,11 @@ function cardHTML(p) {
 /* ────────────────────────────────────────
    PRODUCT MODAL
 ──────────────────────────────────────── */
-function openModal(id, preselectedSize = null) {
+function openModal(id, preselectedSize = null, cartKey = null) {
     const p = PRODUCTS.find(x => x.id === id);
     currentProduct = p;
     selectedSize   = preselectedSize;
+    editingCartKey = cartKey;
     const isShopPage = document.body.classList.contains('shop-page');
     const canBuy = isShopPage || document.body.classList.contains('index-page');
 
@@ -228,6 +227,7 @@ function closeModal() {
     document.getElementById('modal-overlay')?.classList.remove('show');
     document.getElementById('overlay')?.classList.remove('show');
     currentProduct = null;
+    editingCartKey = null;
 }
 
 function parseResponse(response) {
@@ -305,23 +305,26 @@ function addFromModal() {
     if (!currentProduct) return;
     if (!document.body.classList.contains('shop-page') && !document.body.classList.contains('index-page')) return;
     if (currentProduct.sizes && currentProduct.sizes.length && !selectedSize) {
-        const existingItem = cart.find(i => i.key === editingCartKey);
-        if (existingItem) {
-            const newKey = `${currentProduct.id}-${selectedSize}`;
-            if (newKey !== editingCartKey) {
-                const duplicate = cart.find(i => i.key === newKey);
-                if (duplicate) {
-                    duplicate.qty += existingItem.qty;
-                    cart = cart.filter(i => i.key !== editingCartKey);
-                } else {
-                    existingItem.key = newKey;
-                    existingItem.size = selectedSize;
-                }
+        showToast('Please choose a size');
+        return;
+    }
+
+    const existingItem = editingCartKey ? cart.find(i => i.key === editingCartKey) : null;
+    if (existingItem) {
+        const newKey = `${currentProduct.id}-${selectedSize}`;
+        if (newKey !== editingCartKey) {
+            const duplicate = cart.find(i => i.key === newKey);
+            if (duplicate) {
+                duplicate.qty += existingItem.qty;
+                cart = cart.filter(i => i.key !== editingCartKey);
+            } else {
+                existingItem.key = newKey;
+                existingItem.size = selectedSize;
             }
-            showToast('Cart item updated');
-        } else {
-            addToCart(currentProduct, selectedSize);
         }
+        saveCart();
+        updateCartUI();
+        showToast('Cart item updated');
     } else {
         addToCart(currentProduct, selectedSize);
     }
@@ -341,9 +344,8 @@ function editCartItemSize(key) {
    CART
 ──────────────────────────────────────── */
 function quickAdd(id) {
-    const p = PRODUCTS.find(x => x.id === id);
-    const size = p.sizes ? p.sizes[1] || p.sizes[0] : null;
-    addToCart(p, size);
+    // Sizes must be chosen by the customer, so open the product with its size options.
+    openModal(id);
 }
 
 function addToCart(product, size) {

@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
+    <script src="js/config.js"></script>
 </head>
 <body class="checkout-page">
 <header id="site-header">
@@ -314,9 +315,7 @@
     <footer>
     <script>
         // Renamed to avoid clashing with the global API_BASE declared in js/script.js.
-        const CHECKOUT_API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
-            ? 'http://localhost:5000'
-            : '');
+        const CHECKOUT_API_BASE = window.PYNX_API_BASE;
 
         function getApiUrl(path) {
             return `${CHECKOUT_API_BASE}${path}`;
@@ -450,11 +449,7 @@
             } catch (error) {
                 console.error('Checkout submission error:', error);
                 if (error instanceof TypeError || error.name === 'AbortError') {
-                    const localOrders = JSON.parse(localStorage.getItem('pynx_local_orders') || '[]');
-                    localOrders.push({ firstName, lastName, address, email, contact, items, createdAt: new Date().toISOString(), localOnly: true });
-                    localStorage.setItem('pynx_local_orders', JSON.stringify(localOrders));
-                    document.getElementById('checkout-form').style.display = 'none';
-                    document.getElementById('checkout-success').style.display = 'block';
+                    alert('We could not reach the store server, so your order was not placed. Please try again in a moment.');
                     return;
                 }
                 alert(error?.message || 'Order submission failed. Please try again later.');
@@ -546,7 +541,6 @@
         </div>
     </aside>
 
-    <script src="js/config.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>

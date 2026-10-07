@@ -60,6 +60,7 @@
                 <div class="admin-tabs">
                     <button id="tab-orders" class="tab-button active" onclick="switchAdminTab('orders')">Orders</button>
                     <button id="tab-contacts" class="tab-button" onclick="switchAdminTab('contacts')">Customer Concerns</button>
+                    <button id="tab-reviews" class="tab-button" onclick="switchAdminTab('reviews')">Reviews</button>
                     <button id="tab-products" class="tab-button" onclick="switchAdminTab('products')">Products</button>
                 </div>
 
@@ -108,6 +109,23 @@
                     <div class="contacts-list-container" id="contacts-list"></div>
                 </div>
 
+                <div id="reviews-section" class="admin-tab-section" style="display:none;">
+                    <div class="dashboard-cards">
+                        <div class="dashboard-card">
+                            <h2>Total Reviews</h2>
+                            <strong id="reviews-count">0</strong>
+                            <p class="card-note">Reviews submitted by customers.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Average Rating</h2>
+                            <strong id="reviews-average">—</strong>
+                            <p class="card-note">Out of 5 stars.</p>
+                        </div>
+                    </div>
+                    <div class="auth-note admin-status" id="reviews-status">Loading reviews...</div>
+                    <div class="contacts-list-container" id="reviews-list"></div>
+                </div>
+
                 <div id="products-section" class="admin-tab-section" style="display:none;">
                     <div class="dashboard-cards">
                         <div class="dashboard-card">
@@ -143,6 +161,9 @@
     const ordersSection = document.getElementById('orders-section');
     const contactsSection = document.getElementById('contacts-section');
     const productsSection = document.getElementById('products-section');
+    const reviewsSection = document.getElementById('reviews-section');
+    const reviewsList = document.getElementById('reviews-list');
+    const reviewsStatus = document.getElementById('reviews-status');
     const contactsList = document.getElementById('contacts-list');
     const contactsStatus = document.getElementById('contacts-status');
     const productsList = document.getElementById('products-list');
@@ -150,17 +171,17 @@
     const productCount = document.getElementById('product-count');
     const saleCount = document.getElementById('sale-count');
 
-    const API_BASE = window.PYNX_API_URL || (
-        window.location.protocol === 'file:' || window.location.hostname === 'localhost'
-            ? 'http://localhost:5000'
-            : ''
-    );
+    const API_BASE = window.PYNX_API_BASE;
     const IS_STATIC_HOST = window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:';
-    const STATIC_ADMIN_EMAIL = 'Contactpynx@gmail.com';
+    const STATIC_ADMIN_EMAIL = 'admin@pynx.com';
     const STATIC_ADMIN_PASSWORD = 'PYNX2026!';
 
     function getToken() {
         return localStorage.getItem('pynx_admin_token');
+    }
+
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     }
 
     function getApiUrl(path) {
@@ -287,11 +308,11 @@
                 const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
                 const createdDate = new Date(order.createdAt).toLocaleString();
                 const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
-                    const name = item.product?.name || 'Item';
-                    const price = (item.product?.price || 0).toFixed(2);
-                    const qty = item.qty || 1;
-                    const size = item.size ? ` (${item.size})` : '';
-                    const img = item.product?.image ? `<img class="item-thumb" src="${item.product.image}" alt="${name}">` : '';
+                    const name = esc(item.product?.name || 'Item');
+                    const price = (Number(item.product?.price) || 0).toFixed(2);
+                    const qty = esc(item.qty || 1);
+                    const size = item.size ? ` (${esc(item.size)})` : '';
+                    const img = item.product?.image ? `<img class="item-thumb" src="${esc(item.product.image)}" alt="${name}">` : '';
                     return `<li class="item-chip">${img}<span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
                 }).join('')}</ul>` : '<span class="empty-state">No items</span>';
                 return `<div class="order-card">
@@ -303,19 +324,19 @@
                         <div class="order-info-section">
                             <div class="order-info-row">
                                 <label>Name:</label>
-                                <span>${order.firstName} ${order.lastName}</span>
+                                <span>${esc(order.firstName)} ${esc(order.lastName)}</span>
                             </div>
                             <div class="order-info-row">
                                 <label>Email:</label>
-                                <span><a href="mailto:${order.email}">${order.email}</a></span>
+                                <span><a href="mailto:${esc(order.email)}">${esc(order.email)}</a></span>
                             </div>
                             <div class="order-info-row">
                                 <label>Phone:</label>
-                                <span>${order.contact}</span>
+                                <span>${esc(order.contact)}</span>
                             </div>
                             <div class="order-info-row">
                                 <label>Address:</label>
-                                <span>${order.address}</span>
+                                <span>${esc(order.address)}</span>
                             </div>
                         </div>
                         <div class="order-divider"></div>
@@ -423,21 +444,21 @@
                     <div class="concern-info-section">
                         <div class="concern-info-row">
                             <label>Name:</label>
-                            <span>${contact.name}</span>
+                            <span>${esc(contact.name)}</span>
                         </div>
                         <div class="concern-info-row">
                             <label>Email:</label>
-                            <span><a href="mailto:${contact.email}">${contact.email}</a></span>
+                            <span><a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a></span>
                         </div>
                         <div class="concern-info-row">
                             <label>Phone:</label>
-                            <span>${contact.phone || '—'}</span>
+                            <span>${esc(contact.phone) || '—'}</span>
                         </div>
                     </div>
                     <div class="concern-divider"></div>
                     <div class="concern-message-section">
                         <label class="message-label">Message:</label>
-                        <p class="concern-message-text">${contact.message}</p>
+                        <p class="concern-message-text">${esc(contact.message)}</p>
                     </div>
                     <div class="concern-divider"></div>
                     <div class="concern-footer-section">
@@ -455,19 +476,107 @@
         }
     }
 
+    async function fetchReviews() {
+        const token = getToken();
+        if (!token || token === 'local-admin-session') {
+            reviewsStatus.textContent = 'Connect the deployed API to load customer reviews.';
+            reviewsStatus.classList.add('error');
+            document.getElementById('reviews-count').textContent = 'API required';
+            reviewsList.innerHTML = '<div class="empty-state-card">Customer reviews are unavailable until the API is connected.</div>';
+            return;
+        }
+
+        let reviews = [];
+        try {
+            const response = await fetch(getApiUrl('/api/admin/reviews'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to load reviews.');
+            }
+            reviews = data.reviews || [];
+        } catch (error) {
+            console.error(error);
+            if (error.message.includes('Invalid or expired token') || error.message.includes('Missing authorization token')) {
+                localStorage.removeItem('pynx_admin_token');
+                adminNote.textContent = 'Session expired. Please log in again.';
+                adminNote.classList.add('error');
+                showLogin();
+                return;
+            }
+            reviewsStatus.textContent = error.message || 'Unable to load reviews.';
+            reviewsStatus.classList.add('error');
+            reviewsList.innerHTML = '<div class="empty-state-card">Reviews cannot be loaded right now.</div>';
+            return;
+        }
+
+        const average = reviews.length ? reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / reviews.length : 0;
+        document.getElementById('reviews-count').textContent = `${reviews.length} review(s)`;
+        document.getElementById('reviews-average').textContent = reviews.length ? `${average.toFixed(1)} / 5` : '—';
+        reviewsStatus.textContent = 'Customer reviews are displayed below.';
+        reviewsStatus.classList.remove('error');
+
+        if (reviews.length === 0) {
+            reviewsList.innerHTML = '<div class="empty-state-card">No reviews yet.</div>';
+            return;
+        }
+
+        reviewsList.innerHTML = reviews.map((review, index) => {
+            const stars = Math.max(0, Math.min(5, Number(review.rating) || 0));
+            return `<div class="concern-card">
+                <div class="concern-card-header">
+                    <span class="concern-number">Review #${index + 1}</span>
+                    <span class="concern-status-badge">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>
+                </div>
+                <div class="concern-card-body">
+                    <div class="concern-info-section">
+                        <div class="concern-info-row">
+                            <label>Name:</label>
+                            <span>${esc(review.name)}</span>
+                        </div>
+                        <div class="concern-info-row">
+                            <label>Email:</label>
+                            <span>${review.email ? `<a href="mailto:${esc(review.email)}">${esc(review.email)}</a>` : '—'}</span>
+                        </div>
+                        <div class="concern-info-row">
+                            <label>Product:</label>
+                            <span>${esc(review.productName) || '—'}</span>
+                        </div>
+                    </div>
+                    <div class="concern-divider"></div>
+                    <div class="concern-message-section">
+                        <label class="message-label">Review:</label>
+                        <p class="concern-message-text">${esc(review.comment)}</p>
+                    </div>
+                    <div class="concern-divider"></div>
+                    <div class="concern-footer-section">
+                        <div class="concern-info-row">
+                            <label>Submitted:</label>
+                            <span>${new Date(review.createdAt).toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     function switchAdminTab(tab) {
         const ordersTab = document.getElementById('tab-orders');
         const contactsTab = document.getElementById('tab-contacts');
+        const reviewsTab = document.getElementById('tab-reviews');
         const productsTab = document.getElementById('tab-products');
         
         // Hide all sections first
         ordersSection.style.display = 'none';
         contactsSection.style.display = 'none';
+        reviewsSection.style.display = 'none';
         productsSection.style.display = 'none';
         
         // Remove active class from all tabs
         ordersTab.classList.remove('active');
         contactsTab.classList.remove('active');
+        reviewsTab.classList.remove('active');
         productsTab.classList.remove('active');
         
         // Show and activate the selected tab
@@ -475,6 +584,10 @@
             contactsSection.style.display = '';
             contactsTab.classList.add('active');
             fetchContacts();
+        } else if (tab === 'reviews') {
+            reviewsSection.style.display = '';
+            reviewsTab.classList.add('active');
+            fetchReviews();
         } else if (tab === 'products') {
             productsSection.style.display = '';
             productsTab.classList.add('active');
@@ -673,9 +786,13 @@
                 await fetchOrders();
                 return;
             }
-            adminNote.textContent = error.message === 'Failed to fetch'
-                ? backendUnavailableMessage()
-                : error.message || 'Invalid credentials.';
+            if (IS_STATIC_HOST && !window.PYNX_API_URL) {
+                adminNote.textContent = `Incorrect staff email or password. Use ${STATIC_ADMIN_EMAIL} with the staff password. ${backendUnavailableMessage()}`;
+            } else {
+                adminNote.textContent = error.message === 'Failed to fetch'
+                    ? backendUnavailableMessage()
+                    : error.message || 'Invalid credentials.';
+            }
             adminNote.classList.add('error');
         }
     });
@@ -687,26 +804,66 @@
         showLogin();
     });
 
+    function refreshActiveTab() {
+        if (productsSection.style.display !== 'none') {
+            fetchProducts();
+        } else if (reviewsSection.style.display !== 'none') {
+            fetchReviews();
+        } else if (contactsSection.style.display !== 'none') {
+            fetchContacts();
+        } else {
+            fetchOrders();
+        }
+    }
+
     document.getElementById('admin-refresh').addEventListener('click', function() {
         if (productsSection.style.display !== 'none') {
             productsStatus.textContent = 'Refreshing products...';
             productsStatus.classList.remove('error');
-            fetchProducts();
+        } else if (reviewsSection.style.display !== 'none') {
+            reviewsStatus.textContent = 'Refreshing reviews...';
+            reviewsStatus.classList.remove('error');
         } else if (contactsSection.style.display !== 'none') {
             contactsStatus.textContent = 'Refreshing customer concerns...';
             contactsStatus.classList.remove('error');
-            fetchContacts();
         } else {
             adminStatus.textContent = 'Refreshing orders...';
             adminStatus.classList.remove('error');
-            fetchOrders();
         }
+        refreshActiveTab();
     });
+
+    // Pick up orders and reviews placed from other devices without a manual refresh.
+    setInterval(function() {
+        const token = getToken();
+        if (token && token !== 'local-admin-session' && adminDashboard.style.display !== 'none' && productsSection.style.display === 'none') {
+            refreshActiveTab();
+        }
+    }, 30000);
+
+    async function checkApiConnection() {
+        if (IS_STATIC_HOST && !window.PYNX_API_URL) {
+            adminNote.textContent = backendUnavailableMessage();
+            adminNote.classList.add('error');
+            return;
+        }
+        try {
+            const response = await fetch(getApiUrl('/api/health'));
+            const data = await parseResponse(response);
+            if (!response.ok || data.status !== 'ok') throw new Error('unhealthy');
+            adminNote.textContent = 'Connected to the PYNX API. Staff login required to access orders.';
+            adminNote.classList.remove('error');
+        } catch (err) {
+            adminNote.textContent = backendUnavailableMessage();
+            adminNote.classList.add('error');
+        }
+    }
 
     if (getToken()) {
         fetchOrders();
     } else {
         showLogin();
+        checkApiConnection();
     }
 </script>
 <footer>

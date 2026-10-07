@@ -37,8 +37,7 @@
                 <input id="login-password" type="password" placeholder="Enter your password" required>
                 <p class="auth-note" id="login-note">Sign in to continue.</p>
                 <div class="form-buttons">
-                    <button type="submit" class="btn-primary form-submit">Log In</button>
-                    <a id="btn-google" class="btn-google-icon" href="https://accounts.google.com/signin" target="_blank" rel="noopener" title="Continue with Google">Continue with Google</a>
+                    <button type="submit" class="btn-primary form-submit">Log In</button>
                 </div>
             </form>
             <p class="auth-switch">Don't have an account? <a href="signup.html">Create account</a></p>
@@ -51,9 +50,7 @@
 <script>
     const loginForm = document.getElementById('login-form');
     const loginNote = document.getElementById('login-note');
-    const API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' || window.location.port !== '5000'
-        ? 'http://localhost:5000'
-        : '');
+    const API_BASE = window.PYNX_API_BASE;
     const returnPage = new URLSearchParams(window.location.search).get('return');
     const createAccountLink = document.querySelector('.auth-switch a[href="signup.html"]');
     if (createAccountLink && returnPage === 'checkout.html') {
@@ -119,18 +116,6 @@
         loginNote.textContent = 'Sign in to continue.';
         loginNote.classList.remove('error');
     });
-
-    const googleBtn = document.getElementById('btn-google');
-    if (googleBtn) {
-        googleBtn.addEventListener('click', function(e){
-            e.preventDefault();
-            const url = this.href;
-            const w = 600, h = 700;
-            const left = window.screenX + Math.max(0, Math.floor((window.outerWidth - w) / 2));
-            const top = window.screenY + Math.max(0, Math.floor((window.outerHeight - h) / 2));
-            window.open(url, 'googleSignIn', `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${w},height=${h},left=${left},top=${top}`);
-        });
-    }
 </script>
 <footer>
     <div class="footer-bottom">

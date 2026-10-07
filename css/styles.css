@@ -2662,6 +2662,7 @@
         .modal-info {
             padding: 2.5rem;
             overflow-y: auto;
+            max-height: 90vh;
             display: flex;
             flex-direction: column;
         }
@@ -2843,7 +2844,8 @@
             nav { display: none; }
             .menu-toggle { display: flex; }
             .footer-grid { grid-template-columns: 1fr 1fr; }
-            .modal-box { grid-template-columns: 1fr; }
+            .modal-box { grid-template-columns: 1fr; overflow-y: auto; }
+            .modal-info { max-height: none; overflow-y: visible; }
             .modal-img { min-height: 200px; font-size: 5rem; }
             .modal-img span { padding: 2rem; }
         }

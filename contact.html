@@ -79,11 +79,54 @@
             </div>
         </form>
     </section>
+    <section class="contact-panel">
+        <form class="contact-inner" id="review-form">
+            <div class="page-header">
+                <h1>Leave a Review</h1>
+                <p class="page-sub">Tell us what you think of PYNX.</p>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="r-name">Name</label>
+                    <input type="text" id="r-name" name="name" placeholder="Your name" maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label for="r-email">Email (optional)</label>
+                    <input type="email" id="r-email" name="email" placeholder="you@example.com">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="r-product">Product (optional)</label>
+                    <input type="text" id="r-product" name="productName" placeholder="e.g. Vintage Cap" maxlength="200">
+                </div>
+                <div class="form-group">
+                    <label for="r-rating">Rating</label>
+                    <select id="r-rating" name="rating">
+                        <option value="5">★★★★★ (5)</option>
+                        <option value="4">★★★★☆ (4)</option>
+                        <option value="3">★★★☆☆ (3)</option>
+                        <option value="2">★★☆☆☆ (2)</option>
+                        <option value="1">★☆☆☆☆ (1)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="r-comment">Review</label>
+                <textarea id="r-comment" name="comment" placeholder="Share your experience" maxlength="2000"></textarea>
+            </div>
+            <button type="submit" class="btn-primary form-submit">Submit Review</button>
+            <div class="form-success" id="review-success">
+                <div class="check">✓</div>
+                <p>Thank you for your review!</p>
+            </div>
+        </form>
+    </section>
 </main>
     <script src="js/config.js"></script>
     <script src="js/script.js"></script>
     <script>
-        const CONTACT_API_BASE = window.PYNX_API_URL || (window.location.protocol === 'file:' ? 'http://localhost:5000' : '');
+        const CONTACT_API_BASE = window.PYNX_API_BASE;
         const contactForm = document.getElementById('contact-form');
         const formSuccess = document.getElementById('form-success');
 
@@ -164,6 +207,37 @@
             contactForm.style.display = 'none';
             formSuccess.style.display = 'block';
         }
+
+        const reviewForm = document.getElementById('review-form');
+        const reviewSuccess = document.getElementById('review-success');
+        reviewForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const name = document.getElementById('r-name').value.trim();
+            const email = document.getElementById('r-email').value.trim();
+            const productName = document.getElementById('r-product').value.trim();
+            const rating = Number(document.getElementById('r-rating').value);
+            const comment = document.getElementById('r-comment').value.trim();
+            if (!name || !comment) { showToast('Please enter your name and review'); return; }
+            if (email && !email.includes('@')) { showToast('Please enter a valid email address'); return; }
+
+            try {
+                const response = await fetch(`${CONTACT_API_BASE}/api/reviews`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, productName, rating, comment }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to submit your review.');
+                }
+                reviewForm.reset();
+                Array.from(reviewForm.children).forEach(el => { if (el !== reviewSuccess) el.style.display = 'none'; });
+                reviewSuccess.style.display = 'block';
+            } catch (err) {
+                console.error('Review submit failed:', err);
+                showToast(err instanceof TypeError || err instanceof SyntaxError ? 'Cannot reach the server. Please try again later.' : err.message);
+            }
+        });
     </script>
     <script src="js/admin-link.js"></script>
     <div class="toast" id="toast"></div>

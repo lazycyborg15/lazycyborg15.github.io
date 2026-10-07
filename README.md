@@ -49,18 +49,35 @@ GitHub Pages can serve the storefront files, but it cannot run this API or share
 
 ### Deploy the shared API
 
-1. Create a new Web Service on Render and connect this repository.
-2. Set the root directory to `server`.
-3. Set the build command to `npm install`.
-4. Set the start command to `npm start`.
-5. Add environment variables: `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `CORS_ORIGIN`.
-6. After deployment, copy the Render URL into `js/config.js`:
+Easiest: use the included Render blueprint.
+
+1. Push this repository to GitHub. In Render choose **New → Blueprint** and select the repo; [render.yaml](render.yaml) creates the `pynx-api` service.
+2. When prompted, enter `ADMIN_PASSWORD`, `EMAIL_USER` / `EMAIL_PASS` (a Gmail address and its app password, used for order, review and message emails) and `MONGODB_URI` (for example a free MongoDB Atlas cluster, so accounts and orders survive redeploys).
+3. Open `https://<your-service>.onrender.com/api/health`; it should return `{"status":"ok"}`.
+4. Copy that URL into `js/config.js`. Every page (storefront, checkout, login, signup, contact, admin) reads this one setting:
 
 ```js
 window.PYNX_API_URL = 'https://your-service.onrender.com';
 ```
 
-The same API URL must be used by the storefront and admin page. Contact messages, orders, product prices, and discounts will then use the shared API instead of browser storage. For data that must survive server restarts or redeploys, replace the JSON files with MongoDB or attach persistent storage to the hosting service.
+The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, and discounts then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
+
+Other settings: `JWT_SECRET`, `ADMIN_EMAIL`, `CORS_ORIGIN`, `NOTIFY_EMAIL` (comma-separated recipients; defaults to `Contactpynx@gmail.com`) and `DATA_DIR`. If `ADMIN_EMAIL` / `ADMIN_PASSWORD` are not set the admin login defaults to `admin@pynx.com` / `PYNX2026!`, so always set your own in production. Without `MONGODB_URI` the server writes JSON files to `DATA_DIR`, which is wiped on hosts with an ephemeral disk.
+
+### Admin API reference
+
+All `/api/admin/*` routes need `Authorization: Bearer <token>` from `POST /api/admin/login`.
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/admin/login` | Staff login, returns a 2-hour token |
+| `GET /api/admin/orders` | All orders, newest first |
+| `GET /api/admin/contacts` | Customer concerns |
+| `GET /api/admin/reviews` | Customer reviews |
+| `GET /api/admin/products` | Product catalog |
+| `PUT /api/admin/products/:id` | Update price, original price, sale flag |
+
+Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `POST /api/contact`, `POST /api/reviews`, `GET /api/products`, `GET /api/health`.
 
 ## Static site fallback
 
