@@ -918,7 +918,7 @@ function logoutCustomer(event) {
     localStorage.removeItem('pynx_logged_in');
     localStorage.removeItem('pynx_user');
     localStorage.removeItem('pynx_customer_token');
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
 }
 
 function updateCustomerAuthLinks() {

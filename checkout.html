@@ -143,7 +143,8 @@
     <script>
         // Check if user is logged in on page load
         function checkCheckoutAuth() {
-            if (!localStorage.getItem('pynx_logged_in')) {
+            const hasCartItems = JSON.parse(localStorage.getItem('pynx_cart') || '[]').length > 0;
+            if (!localStorage.getItem('pynx_logged_in') && hasCartItems) {
                 const modal = document.getElementById('auth-modal');
                 modal.style.display = 'flex';
                 modal.style.overflow = 'auto';
@@ -162,7 +163,7 @@
             localStorage.removeItem('pynx_logged_in');
             localStorage.removeItem('pynx_user');
             localStorage.removeItem('pynx_customer_token');
-            window.location.href = 'login.html';
+            window.location.href = 'index.html';
         }
 
         function updateCheckoutAuthLinks() {
