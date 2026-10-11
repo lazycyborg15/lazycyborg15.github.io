@@ -339,6 +339,20 @@
             }
         }
 
+        // Items chosen in the cart drawer; falls back to the full cart when no selection was made.
+        function getCheckoutItems() {
+            const cartItems = getPersistedCart();
+            const storedKeys = sessionStorage.getItem('pynx_checkout_keys');
+            if (!storedKeys) return cartItems;
+            try {
+                const keys = new Set(JSON.parse(storedKeys));
+                return cartItems.filter(item => keys.has(item.key));
+            } catch (err) {
+                console.error('Failed to parse checkout selection:', err);
+                return cartItems;
+            }
+        }
+
         function saveLocalOrder(order) {
             const orders = JSON.parse(localStorage.getItem('pynx_local_orders') || '[]');
             orders.push({ ...order, createdAt: new Date().toISOString(), localOnly: true });
@@ -348,7 +362,7 @@
         function renderCheckoutSummary() {
             const itemsEl = document.getElementById('checkout-items');
             const subtotalEl = document.getElementById('checkout-subtotal');
-            const cartItems = getPersistedCart();
+            const cartItems = getCheckoutItems();
 
             if (!cartItems.length) {
                 itemsEl.innerHTML = '<p class="checkout-empty">Your bag is empty.</p>';
@@ -398,8 +412,7 @@
             const address = document.getElementById('checkout-address').value.trim();
             const email = document.getElementById('checkout-email').value.trim();
             const contact = document.getElementById('checkout-contact').value.trim();
-            const persistedCart = getPersistedCart();
-            const cartItems = Array.isArray(window.cart) && window.cart.length ? window.cart : persistedCart;
+            const cartItems = getCheckoutItems();
             const items = cartItems.map(item => ({
                 product: {
                     id: item.product?.id,
@@ -544,6 +557,6 @@
         </div>
     </aside>
 
-    <script src="js/script.js?v=20261012"></script>
+    <script src="js/script.js?v=20261013"></script>
 </body>
 </html>

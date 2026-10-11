@@ -146,7 +146,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/script.js?v=20261012"></script>
+<script src="js/script.js?v=20261013"></script>
 <script>
     const revealItems = document.querySelectorAll('.reveal');
     const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); revealObserver.unobserve(entry.target); } }), { threshold: .12 });

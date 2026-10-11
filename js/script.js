@@ -616,6 +616,9 @@ document.addEventListener('click', function (event) {
 
 function checkout() {
     if (cart.length === 0) { showToast('Your cart is empty'); return; }
+    const checkoutKeys = cart.filter(item => selectedCartKeys.has(item.key)).map(item => item.key);
+    if (checkoutKeys.length === 0) { showToast('Select the items you want to check out'); return; }
+    sessionStorage.setItem('pynx_checkout_keys', JSON.stringify(checkoutKeys));
     closeCart();
     window.location.href = 'checkout.html';
 }
