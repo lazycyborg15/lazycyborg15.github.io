@@ -3,6 +3,10 @@
   functions = "netlify/functions"
   command = "echo Static site, no build step"
 
+[build.environment]
+  # These are public contact/staff addresses that appear in the site and server defaults.
+  SECRETS_SCAN_OMIT_KEYS = "EMAIL_USER,ADMIN_EMAIL,NOTIFY_EMAIL"
+
 [functions]
   node_bundler = "esbuild"
 

@@ -74,7 +74,7 @@ window.PYNX_API_URL = 'https://your-service.onrender.com';
 
 The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, and discounts then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
 
-Other settings: `JWT_SECRET`, `ADMIN_EMAIL`, `CORS_ORIGIN`, `NOTIFY_EMAIL` (comma-separated recipients; defaults to `Contactpynx@gmail.com`) and `DATA_DIR`. If `ADMIN_EMAIL` / `ADMIN_PASSWORD` are not set the admin login defaults to `admin@pynx.com` / `PYNX2026!`, so always set your own in production. Without `MONGODB_URI` the server writes JSON files to `DATA_DIR`, which is wiped on hosts with an ephemeral disk.
+Other settings: `JWT_SECRET`, `ADMIN_EMAIL`, `CORS_ORIGIN`, `NOTIFY_EMAIL` (comma-separated recipients) and `DATA_DIR`. Always set your own `ADMIN_EMAIL` / `ADMIN_PASSWORD` in production; never commit their values. Without `MONGODB_URI` the server writes JSON files to `DATA_DIR`, which is wiped on hosts with an ephemeral disk.
 
 ### Admin API reference
 
