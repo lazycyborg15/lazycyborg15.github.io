@@ -1996,6 +1996,34 @@
             font-size: .95rem;
         }
 
+        .order-header-actions {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+        }
+
+        .order-remove-btn {
+            background: #fff;
+            color: #b91c1c;
+            border: 1px solid rgba(185,28,28,.35);
+            border-radius: 999px;
+            padding: .4rem .9rem;
+            font-size: .85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .2s ease, color .2s ease;
+        }
+
+        .order-remove-btn:hover:not(:disabled) {
+            background: #b91c1c;
+            color: #fff;
+        }
+
+        .order-remove-btn:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+
         .order-card-body {
             padding: 1.5rem;
         }

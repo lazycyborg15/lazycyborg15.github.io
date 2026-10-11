@@ -394,11 +394,42 @@ app.post('/api/admin/login', (req, res) => {
 
 app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
   try {
-    const orders = (await loadOrders()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Orders saved before ids existed get one here so they can be removed by id.
+    const orders = await withLock(async () => {
+      const stored = await loadOrders();
+      if (stored.some(order => !order.id)) {
+        stored.forEach(order => {
+          if (!order.id) order.id = crypto.randomUUID();
+        });
+        await saveOrders(stored);
+      }
+      return stored;
+    });
+    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return res.json({ success: true, orders });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load orders.' });
+  }
+});
+
+app.delete('/api/admin/orders/:id', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  try {
+    const removed = await withLock(async () => {
+      const orders = await loadOrders();
+      const remaining = orders.filter(order => order.id !== orderId);
+      if (remaining.length === orders.length) return false;
+      await saveOrders(remaining);
+      return true;
+    });
+    if (!removed) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to remove order.' });
   }
 });
 

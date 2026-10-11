@@ -319,7 +319,10 @@
                 return `<div class="order-card">
                     <div class="order-card-header">
                         <span class="order-number">Order #${index+1}</span>
-                        <span class="order-total-badge">₱${total.toFixed(2)}</span>
+                        <div class="order-header-actions">
+                            <span class="order-total-badge">₱${total.toFixed(2)}</span>
+                            <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
+                        </div>
                     </div>
                     <div class="order-card-body">
                         <div class="order-info-section">
@@ -386,6 +389,39 @@
             showDashboard();
         }
     }
+
+    async function removeOrder(orderId, button) {
+        if (!confirm('Remove this order? It will be deleted from the admin list.')) return;
+
+        const token = getToken();
+        if (!token || token === 'local-admin-session') {
+            showLogin();
+            return;
+        }
+
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}`), {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to remove order.');
+            }
+            await fetchOrders();
+        } catch (error) {
+            console.error(error);
+            adminStatus.textContent = error.message || 'Unable to remove order.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
+    ordersList.addEventListener('click', event => {
+        const button = event.target.closest('.order-remove-btn');
+        if (button) removeOrder(button.dataset.orderId, button);
+    });
 
     async function fetchContacts() {
         const token = getToken();
