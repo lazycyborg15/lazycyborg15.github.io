@@ -906,11 +906,19 @@ function setActiveNav() {
         currentPage = 'admin';
     }
 
+    // Collections view params (?view=new / ?view=sale) map to their own nav tabs.
+    let activePage = currentPage;
+    if (currentPage === 'shop') {
+        const view = new URLSearchParams(window.location.search).get('view');
+        if (view === 'new') activePage = 'new-arrivals';
+        else if (view === 'sale') activePage = 'sale';
+    }
+
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(link => {
         link.classList.remove('active');
         const linkPage = link.getAttribute('data-page');
-        if (linkPage === currentPage) {
+        if (linkPage === activePage) {
             link.classList.add('active');
         }
     });
