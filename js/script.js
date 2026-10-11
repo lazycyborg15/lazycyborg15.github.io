@@ -945,15 +945,22 @@ function updateCustomerAuthLinks() {
     document.querySelectorAll('a[href="login.html"]').forEach(link => {
         link.textContent = isLoggedIn ? 'Logout' : 'Login';
         link.setAttribute('aria-label', isLoggedIn ? 'Log out of your customer account' : 'Log in to your customer account');
-        link.onclick = isLoggedIn ? logoutCustomer : null;
+        link.dataset.authAction = isLoggedIn ? 'logout' : 'login';
     });
 }
+
+// Delegated so the mobile menu's own close handler on these links is not overwritten.
+document.addEventListener('click', event => {
+    const link = event.target.closest('a[data-auth-action="logout"]');
+    if (link) logoutCustomer(event);
+});
 
 // Re-sync the nav when a page is restored from the back/forward cache or login state changes in another tab.
 window.addEventListener('pageshow', updateCustomerAuthLinks);
 window.addEventListener('storage', event => {
     if (event.key === null || event.key === 'pynx_logged_in') updateCustomerAuthLinks();
 });
+updateCustomerAuthLinks();
 
 /* ────────────────────────────────────────
    SHOP COLLECTIONS (dynamic per product type)
