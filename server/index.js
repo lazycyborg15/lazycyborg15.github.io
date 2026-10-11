@@ -175,6 +175,20 @@ async function notifyAdmins(subject, text) {
   }
 }
 
+async function notifyCustomer(to, subject, text) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.warn('Customer email not sent: missing EMAIL_USER or EMAIL_PASS environment variables.');
+    return { emailSent: false, emailError: 'Email is not configured on the server.' };
+  }
+  try {
+    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
+    return { emailSent: true, emailError: null };
+  } catch (err) {
+    console.error('Order saved, but customer confirmation email failed:', err);
+    return { emailSent: false, emailError: err.message || 'Email send failed' };
+  }
+}
+
 app.post('/api/customers/signup', async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -268,7 +282,13 @@ app.post('/api/orders', async (req, res) => {
     `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
   );
 
-  return res.status(201).json({ success: true, order, emailSent, emailError });
+  const customerEmail = await notifyCustomer(
+    String(email).trim(),
+    'Thank you for your PYNX order',
+    `Hi ${firstName},\n\nThank you for shopping with PYNX. We've received your order.\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nShipping address: ${address}\nContact: ${contact}\nOrder placed: ${order.createdAt}\n\nWe'll be in touch with updates on your order.\n\n- PYNX`
+  );
+
+  return res.status(201).json({ success: true, order, emailSent, emailError, customerEmailSent: customerEmail.emailSent });
 });
 
 // The public catalog is read from the same persistent store that admins edit.

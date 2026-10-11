@@ -121,13 +121,19 @@ function renderProducts() {
     if (bikinisGrid) bikinisGrid.innerHTML = bikinis.map(cardHTML).join('');
 }
 
+function isOnSaleProduct(p) {
+    const currentPrice = Number(p.price) || 0;
+    const originalPrice = Number(p.originalPrice) || currentPrice;
+    return Boolean(p.onSale) || originalPrice > currentPrice;
+}
+
 function cardHTML(p) {
     const isShopPage = document.body.classList.contains('shop-page');
     const isIndexPage = document.body.classList.contains('index-page');
     const canBuy = isShopPage || isIndexPage;
     const currentPrice = Number(p.price) || 0;
     const originalPrice = Number(p.originalPrice) || currentPrice;
-    const isDiscount = Boolean(p.onSale) || originalPrice > currentPrice;
+    const isDiscount = isOnSaleProduct(p);
     const priceHTML = canBuy ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
     const originalPriceHTML = canBuy && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
     const saleBadge = isDiscount ? `<span class="product-sale-badge">Sale</span>` : '';
@@ -596,10 +602,13 @@ document.addEventListener('click', function (event) {
     const wishlistOpen = wishlistDrawer?.classList.contains('open');
     if (!cartOpen && !wishlistOpen) return;
 
-    const clickedInsideCart = cartOpen && cartDrawer.contains(event.target);
-    const clickedInsideWishlist = wishlistOpen && wishlistDrawer.contains(event.target);
-    const clickedCartToggle = event.target.closest('.cart-btn');
-    const clickedWishlistToggle = event.target.closest('.wishlist-header-btn');
+    // composedPath() is captured at dispatch time, so it still includes drawer items
+    // that were re-rendered (and detached) by the click handler.
+    const path = event.composedPath();
+    const clickedInsideCart = cartOpen && path.includes(cartDrawer);
+    const clickedInsideWishlist = wishlistOpen && path.includes(wishlistDrawer);
+    const clickedCartToggle = event.target.closest?.('.cart-btn');
+    const clickedWishlistToggle = event.target.closest?.('.wishlist-header-btn');
 
     if (clickedInsideCart || clickedInsideWishlist || clickedCartToggle || clickedWishlistToggle) return;
     closeAll();
@@ -989,14 +998,36 @@ function initShopCollections() {
     if (!categoriesSection || !collectionSection) return;
 
     const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
     const type = params.get('type');
-    const items = type ? PRODUCTS.filter(p => p.type === type) : [];
+    const typeItems = type ? PRODUCTS.filter(p => p.type === type) : [];
 
-    if (type && items.length) {
-        const meta = collectionMetaFor(type, items);
-        document.getElementById('collection-title').textContent = meta.label.toUpperCase();
-        document.getElementById('collection-eyebrow').textContent = meta.eyebrow;
-        document.getElementById('collection-grid').innerHTML = items.map(cardHTML).join('');
+    let collection = null;
+    if (view === 'sale') {
+        collection = {
+            title: 'Sale',
+            eyebrow: 'Sale',
+            items: PRODUCTS.filter(isOnSaleProduct),
+            emptyMessage: 'No discounted items or sale at the moment. Stay tuned!'
+        };
+    } else if (view === 'new') {
+        collection = {
+            title: 'New Arrivals',
+            eyebrow: 'New Arrivals',
+            items: PRODUCTS,
+            emptyMessage: 'Stay tuned!'
+        };
+    } else if (type && typeItems.length) {
+        const meta = collectionMetaFor(type, typeItems);
+        collection = { title: meta.label, eyebrow: meta.eyebrow, items: typeItems, emptyMessage: '' };
+    }
+
+    if (collection) {
+        document.getElementById('collection-title').textContent = collection.title.toUpperCase();
+        document.getElementById('collection-eyebrow').textContent = collection.eyebrow;
+        document.getElementById('collection-grid').innerHTML = collection.items.length
+            ? collection.items.map(cardHTML).join('')
+            : `<p style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; letter-spacing: .1rem;">${collection.emptyMessage}</p>`;
         categoriesSection.style.display = 'none';
         collectionSection.style.display = '';
     } else {
