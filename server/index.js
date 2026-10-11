@@ -155,8 +155,10 @@ const transporter = nodemailer.createTransport({
 
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || 'Contactpynx@gmail.com';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@pynx.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PYNX2026!';
-const JWT_SECRET = process.env.JWT_SECRET || 'pynx_admin_secret';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// Without JWT_SECRET a random per-process secret is used, so sessions reset on restart; set it in production.
+const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
+if (!ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set; admin login is disabled.');
 
 // NOTIFY_EMAIL may hold several comma-separated admin addresses.
 async function notifyAdmins(subject, text) {
@@ -363,7 +365,7 @@ function verifyAdmin(req, res, next) {
 
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body;
-  if (String(email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD) {
+  if (ADMIN_PASSWORD && String(email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD) {
     const token = jwt.sign({ role: 'admin', email }, JWT_SECRET, { expiresIn: '2h' });
     return res.json({ success: true, token, email });
   }
