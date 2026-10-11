@@ -945,7 +945,7 @@ function logoutCustomer(event) {
 
 function updateCustomerAuthLinks() {
     const isLoggedIn = localStorage.getItem('pynx_logged_in') === 'true';
-    document.querySelectorAll('a[href="login.html"]').forEach(link => {
+    document.querySelectorAll('a[data-auth-link]').forEach(link => {
         link.textContent = isLoggedIn ? 'Logout' : 'Login';
         link.setAttribute('aria-label', isLoggedIn ? 'Log out of your customer account' : 'Log in to your customer account');
         link.dataset.authAction = isLoggedIn ? 'logout' : 'login';

@@ -22,7 +22,7 @@
                 <li><a href="shop.html?view=sale" data-page="sale" class="nav-link">Sale</a></li>
                 <li><a href="about.html" data-page="about" class="nav-link">About</a></li>
                 <li><a href="contact.html" data-page="contact" class="nav-link">Contact Us</a></li>
-                <li><a href="login.html" data-page="login" class="nav-link">Login</a></li>
+                <li><a href="login.html" data-auth-link data-page="login" class="nav-link">Login</a></li>
             </ul>
         </nav>
         <div class="header-actions">
@@ -45,7 +45,7 @@
                 <a href="caps.html" onclick="closeMenuDropdown()">Caps</a>
                 <a href="about.html" onclick="closeMenuDropdown()">About</a>
                 <a href="contact.html" onclick="closeMenuDropdown()">Contact Us</a>
-                <a href="login.html" onclick="closeMenuDropdown()">Login</a>
+                <a href="login.html" data-auth-link onclick="closeMenuDropdown()">Login</a>
             </div>
         </div>
     </div>
@@ -169,6 +169,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/config.js"></script>
-<script src="js/script.js?v=20261013"></script>
+<script src="js/script.js?v=20261014"></script>
 </body>
 </html>
