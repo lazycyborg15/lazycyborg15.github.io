@@ -176,10 +176,12 @@
             links.forEach(link => {
                 if (!link) return;
                 link.textContent = isLoggedIn ? 'Logout' : 'Login';
-                link.href = isLoggedIn ? 'login.html' : 'login.html';
-                if (isLoggedIn) link.onclick = logoutFromCheckout;
+                link.href = 'login.html';
+                link.onclick = isLoggedIn ? logoutFromCheckout : null;
             });
         }
+
+        window.addEventListener('pageshow', updateCheckoutAuthLinks);
 
         function switchToSignup(e) {
             e.preventDefault();
