@@ -57,9 +57,9 @@
 
     const API_BASE = window.PYNX_API_BASE;
 
-    // Customers only sign up while checking out items.
-    if (!JSON.parse(localStorage.getItem('pynx_cart') || '[]').length) {
-        window.location.replace('shop.html');
+    // Customers who are already signed in go straight to the home page.
+    if (localStorage.getItem('pynx_logged_in') === 'true') {
+        window.location.replace('index.html');
     }
 
     function saveLocalAccount(account) {
@@ -111,7 +111,7 @@
             signupNote.textContent = 'Account created successfully. Redirecting...';
             signupNote.classList.remove('error');
             setTimeout(() => {
-                window.location.href = 'checkout.html';
+                window.location.href = 'index.html';
             }, 800);
         } catch (error) {
             if (error instanceof TypeError || error instanceof SyntaxError) {
@@ -131,7 +131,7 @@
                     signupNote.textContent = 'Account created on this device. Redirecting...';
                     signupNote.classList.remove('error');
                     setTimeout(() => {
-                        window.location.href = 'checkout.html';
+                        window.location.href = 'index.html';
                     }, 800);
                 } catch (localError) {
                     signupNote.textContent = localError.message || 'Unable to create account.';

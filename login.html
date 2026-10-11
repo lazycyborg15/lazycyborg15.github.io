@@ -52,9 +52,9 @@
     const loginNote = document.getElementById('login-note');
     const API_BASE = window.PYNX_API_BASE;
 
-    // Customers only log in while checking out items.
-    if (!JSON.parse(localStorage.getItem('pynx_cart') || '[]').length) {
-        window.location.replace('shop.html');
+    // Customers who are already signed in go straight to the home page.
+    if (localStorage.getItem('pynx_logged_in') === 'true') {
+        window.location.replace('index.html');
     }
 
     function findLocalAccount(email, password) {
@@ -89,7 +89,7 @@
             localStorage.removeItem('pynx_admin_token');
             loginNote.textContent = 'Signed in. Redirecting...';
             loginNote.classList.remove('error');
-            setTimeout(() => { window.location.href = 'checkout.html'; }, 700);
+            setTimeout(() => { window.location.href = 'index.html'; }, 700);
         } catch (error) {
             const account = findLocalAccount(email, password);
             if (account) {
@@ -99,7 +99,7 @@
                 localStorage.removeItem('pynx_admin_token');
                 loginNote.textContent = 'Signed in on this device. Redirecting...';
                 loginNote.classList.remove('error');
-                setTimeout(() => { window.location.href = 'checkout.html'; }, 700);
+                setTimeout(() => { window.location.href = 'index.html'; }, 700);
                 return;
             }
 
