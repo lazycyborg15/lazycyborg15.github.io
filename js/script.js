@@ -80,7 +80,7 @@ async function loadProductCatalog() {
         sizes: product.type === 'cap'
             ? []
             : product.type === 'bikini'
-                ? ['Small', 'Medium', 'Large']
+                ? ['S', 'M', 'L']
                 : Array.isArray(product.sizes) && product.sizes.length
                     ? product.sizes
                     : ['S', 'M', 'L', 'XL']
@@ -95,7 +95,7 @@ async function loadProductCatalog() {
             let size = item.size || '';
             if (product?.type === 'cap') size = '';
             else if (product?.type === 'bikini') {
-                size = ({ XS: 'Small', S: 'Small', M: 'Medium', L: 'Large', XL: 'Large' })[size] || size;
+                size = ({ XS: 'S', Small: 'S', S: 'S', Medium: 'M', M: 'M', Large: 'L', L: 'L', XL: 'L' })[size] || size;
             }
             const key = `${product.id}-${size}`;
             oldKeys.set(oldKey, key);

@@ -51,9 +51,9 @@
     "bg": "#1a1a1a",
       "desc": "Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.",
     "sizes": [
-      "Small",
-      "Medium",
-      "Large"
+      "S",
+      "M",
+      "L"
     ],
     "onSale": false
   }
