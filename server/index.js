@@ -145,13 +145,26 @@ app.use(express.static(path.join(__dirname, '../client/build')));
 
 console.log('Data storage: ' + (MONGODB_URI ? 'MongoDB' : 'JSON files (' + DATA_DIR + ')'));
 
+// Pasted values often carry quotes or spaces (Google shows app passwords as "abcd efgh ijkl mnop"), so they are cleaned first.
+const EMAIL_USER = String(process.env.EMAIL_USER || '').replace(/["'\s]/g, '');
+const EMAIL_PASS = String(process.env.EMAIL_PASS || '').replace(/["'\s]/g, '');
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: EMAIL_USER,
+    pass: EMAIL_PASS,
   },
 });
+
+// Safe summary for the admin page: which account is used and how long the password is, never the password.
+function emailDiagnostics() {
+  const [name = '', domain = ''] = EMAIL_USER.split('@');
+  return {
+    user: EMAIL_USER ? `${name.slice(0, 2)}***@${domain}` : '(not set)',
+    passwordLength: EMAIL_PASS.length,
+  };
+}
 
 const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || 'Contactpynx@gmail.com';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@pynx.com';
@@ -161,11 +174,11 @@ const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).t
 if (!ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set; admin login is disabled.');
 
 // Shown as "PYNX <address>" in the customer's inbox.
-const mailFrom = () => `"PYNX" <${process.env.EMAIL_USER}>`;
+const mailFrom = () => `"PYNX" <${EMAIL_USER}>`;
 
 // NOTIFY_EMAIL may hold several comma-separated admin addresses.
 async function notifyAdmins(subject, text) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  if (!EMAIL_USER || !EMAIL_PASS) {
     console.warn('Email notification not sent: missing EMAIL_USER or EMAIL_PASS environment variables.');
     return { emailSent: false, emailError: 'Email is not configured on the server.' };
   }
@@ -179,7 +192,7 @@ async function notifyAdmins(subject, text) {
 }
 
 async function notifyCustomer(to, subject, text, html) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  if (!EMAIL_USER || !EMAIL_PASS) {
     console.warn('Customer email not sent: missing EMAIL_USER or EMAIL_PASS environment variables.');
     return { emailSent: false, emailError: 'Email is not configured on the server.' };
   }
@@ -764,7 +777,7 @@ app.post('/api/admin/orders/:id/resend-receipt', verifyAdmin, async (req, res) =
     const receipt = receiptEmail(order, link);
     const result = await notifyCustomer(String(order.email || '').trim(), `Your PYNX order receipt (${orderNumber(order)})`, receipt.text, receipt.html);
     await recordReceiptResult(order.id, result);
-    return res.json({ success: true, emailSent: result.emailSent, emailError: result.emailError });
+    return res.json({ success: true, emailSent: result.emailSent, emailError: result.emailError, diagnostics: emailDiagnostics() });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to resend the receipt.' });

@@ -464,7 +464,8 @@
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) throw new Error(data.message || 'Unable to resend the receipt.');
-            alert(data.emailSent ? 'Receipt email sent to the customer.' : `The email could not be sent:\n${data.emailError || 'Unknown error'}`);
+            const info = data.diagnostics ? `\n\nThe server is signing in as ${data.diagnostics.user} with a password of ${data.diagnostics.passwordLength} characters.\nA Gmail app password has exactly 16 characters.` : '';
+            alert(data.emailSent ? 'Receipt email sent to the customer.' : `The email could not be sent:\n${data.emailError || 'Unknown error'}${info}`);
             await fetchOrders();
         } catch (error) {
             console.error(error);
