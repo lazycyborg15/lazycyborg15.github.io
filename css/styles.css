@@ -446,6 +446,13 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 2rem;
             flex-shrink: 0;
+            overflow: hidden;
+        }
+        .thumb-photo {
+            width: 100%; height: 100%;
+            object-fit: contain;
+            display: block;
+            transform: scale(var(--photo-zoom, 1));
         }
         .wishlist-body {
             flex: 1;
@@ -1432,6 +1439,11 @@
         .form-group textarea:focus,
         .form-group select:focus { border-color: var(--ink); }
         .form-group textarea { min-height: 130px; resize: vertical; }
+        .checkout-map { height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line, #ddd); background: #e8e8e2; }
+        .checkout-map-hint { font-size: .72rem; color: var(--mid); margin: .5rem 0 0; letter-spacing: .02rem; text-transform: none; }
+        .checkout-locate-btn { margin-top: .6rem; background: #fff; color: var(--ink); border: 1px solid var(--ink); padding: .6rem 1rem; font-size: .72rem; letter-spacing: .12rem; text-transform: uppercase; cursor: pointer; }
+        .checkout-locate-btn:hover { background: var(--ink); color: #fff; }
+        .checkout-pin { font-size: 30px; line-height: 1; text-align: center; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
         .form-submit {
             display: block;
             width: auto;
@@ -2086,6 +2098,21 @@
             border-color: rgba(22,163,74,.35);
         }
 
+        .receipt-note.ok { color: #15803d; font-weight: 700; }
+        .receipt-note.fail { color: #b91c1c; font-weight: 700; }
+        .order-link-btn {
+            background: none;
+            border: 1px solid rgba(17,17,17,.25);
+            border-radius: 999px;
+            padding: .2rem .7rem;
+            margin-left: .4rem;
+            font-size: .78rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .order-link-btn:hover:not(:disabled) { background: #111; color: #fff; }
+        .order-link-btn:disabled { opacity: .6; cursor: wait; }
+
         .order-card-body {
             padding: 1.5rem;
         }
@@ -2646,6 +2673,7 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 2rem;
             flex-shrink: 0;
+            overflow: hidden;
         }
         .ci-body { flex: 1; }
         .ci-name {
@@ -3029,6 +3057,17 @@
             .card-note { font-size: .72rem; }
             .orders-list-container, .contacts-list-container { padding: 0; gap: .8rem; }
             .order-card-header, .concern-card-header { padding: .9rem; }
+            .order-card-header { flex-direction: column; align-items: stretch; gap: .75rem; }
+            .order-number { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .6rem; font-size: 1rem; }
+            .order-ref { margin-left: 0; white-space: nowrap; }
+            .order-header-actions { width: 100%; justify-content: flex-start; gap: .5rem; }
+            .order-header-actions .order-done-btn,
+            .order-header-actions .order-remove-btn { flex: 1 1 calc(50% - .5rem); padding: .6rem .5rem; text-align: center; white-space: nowrap; }
+            .order-status-badge, .order-total-badge { font-size: .8rem; padding: .35rem .7rem; }
+            .order-items { flex-direction: column; align-items: stretch; }
+            .item-chip { width: 100%; flex-wrap: wrap; gap: .4rem .55rem; }
+            .item-label { flex: 1 1 8rem; min-width: 0; font-size: .9rem; word-break: break-word; }
+            .item-price { margin-left: auto; font-size: .95rem; }
             .order-card-body, .concern-card-body { padding: .9rem; }
             .order-info-section, .concern-info-section { grid-template-columns: 1fr; gap: .8rem; }
             .order-info-row label, .concern-info-row label { font-size: .72rem; }

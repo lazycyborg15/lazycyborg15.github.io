@@ -364,6 +364,14 @@
                                 <label>Created:</label>
                                 <span>${createdDate}</span>
                             </div>
+                            <div class="order-info-row">
+                                <label>Receipt email:</label>
+                                <span>${receiptStatusHtml(order)} <button type="button" class="order-link-btn" data-resend-id="${esc(order.id)}">Resend receipt</button></span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Delivery pin:</label>
+                                <span>${mapLinkHtml(order)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -426,6 +434,46 @@
 
     const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered' };
 
+    function receiptStatusHtml(order) {
+        const info = order.receiptEmail;
+        if (!info) return '<span class="receipt-note">Not recorded</span>';
+        return info.sent
+            ? '<span class="receipt-note ok">Sent</span>'
+            : `<span class="receipt-note fail">Not sent${info.error ? ': ' + esc(info.error) : ''}</span>`;
+    }
+
+    function mapLinkHtml(order) {
+        const pin = order.destination;
+        const target = pin && Number.isFinite(Number(pin.lat)) ? `${pin.lat},${pin.lng}` : order.address;
+        const label = pin ? 'Open exact pin in Google Maps' : 'Search address in Google Maps';
+        return `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target)}" target="_blank" rel="noopener">${label}</a>`;
+    }
+
+    async function resendReceipt(orderId, button) {
+        const token = getToken();
+        if (!token || token === 'local-admin-session') {
+            showLogin();
+            return;
+        }
+        button.disabled = true;
+        button.textContent = 'Sending...';
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/resend-receipt`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to resend the receipt.');
+            alert(data.emailSent ? 'Receipt email sent to the customer.' : `The email could not be sent:\n${data.emailError || 'Unknown error'}`);
+            await fetchOrders();
+        } catch (error) {
+            console.error(error);
+            alert(error.message || 'Unable to resend the receipt.');
+            button.disabled = false;
+            button.textContent = 'Resend receipt';
+        }
+    }
+
     // Buttons for the next step, plus Undo to go one step back.
     function orderActions(order, status) {
         const button = (label, next, extra = '', cls = '') =>
@@ -480,6 +528,11 @@
     }
 
     ordersList.addEventListener('click', event => {
+        const resendButton = event.target.closest('[data-resend-id]');
+        if (resendButton) {
+            resendReceipt(resendButton.dataset.resendId, resendButton);
+            return;
+        }
         const doneButton = event.target.closest('.order-done-btn');
         if (doneButton) {
             setOrderStatus(doneButton.dataset.orderId, doneButton.dataset.status, doneButton);

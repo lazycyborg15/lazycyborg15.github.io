@@ -127,6 +127,17 @@ function isOnSaleProduct(p) {
     return Boolean(p.onSale) || originalPrice > currentPrice;
 }
 
+// Small product picture for the bag and favorites drawers; falls back to the emoji when there is no photo.
+function thumbHTML(p) {
+    if (!p.image) return p.emoji || '';
+    const alt = String(p.name || 'Product').replace(/"/g, '&quot;');
+    return `<img class="thumb-photo" src="${p.image}" alt="${alt}" style="--photo-zoom:${p.imageScale || 1};">`;
+}
+
+function thumbStyle(p) {
+    return p.image ? ` style="background:${p.bg || '#f0f0eb'}22;"` : '';
+}
+
 function cardHTML(p) {
     const isShopPage = document.body.classList.contains('shop-page');
     const isIndexPage = document.body.classList.contains('index-page');
@@ -396,7 +407,7 @@ function updateCartUI() {
                 <label class="drawer-select-item">
                     <input type="checkbox" ${selectedCartKeys.has(item.key) ? 'checked' : ''} onchange="toggleCartSelection('${item.key}', this.checked)" aria-label="Select ${item.product.name}">
                 </label>
-                <div class="ci-thumb">${item.product.emoji}</div>
+                <div class="ci-thumb"${thumbStyle(item.product)}>${thumbHTML(item.product)}</div>
                 <div class="ci-body">
                     <div class="ci-name">${item.product.name}</div>
                     <div class="ci-meta">${item.product.cat}${item.size ? ' — ' + item.size : ''}</div>
@@ -679,7 +690,7 @@ function renderWishlistUI() {
             <label class="drawer-select-item">
                 <input type="checkbox" ${selectedWishlistIds.has(id) ? 'checked' : ''} onchange="toggleWishlistSelection(${id}, this.checked)" aria-label="Select ${product.name}">
             </label>
-            <div class="wishlist-thumb">${product.emoji}</div>
+            <div class="wishlist-thumb"${thumbStyle(product)}>${thumbHTML(product)}</div>
             <div class="wishlist-body">
                 <div class="wishlist-name">${product.name}</div>
                 <div class="wishlist-meta">${product.cat}</div>
@@ -1026,7 +1037,7 @@ function initShopCollections() {
             title: 'Sale',
             eyebrow: 'Sale',
             items: PRODUCTS.filter(isOnSaleProduct),
-            emptyMessage: 'No discounted items or sale at the moment. Stay tuned!'
+            emptyMessage: 'No discounted items at the moment. Stay tuned!'
         };
     } else if (view === 'new') {
         collection = {

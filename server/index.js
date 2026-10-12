@@ -160,6 +160,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
 if (!ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set; admin login is disabled.');
 
+// Shown as "PYNX <address>" in the customer's inbox.
+const mailFrom = () => `"PYNX" <${process.env.EMAIL_USER}>`;
+
 // NOTIFY_EMAIL may hold several comma-separated admin addresses.
 async function notifyAdmins(subject, text) {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -167,7 +170,7 @@ async function notifyAdmins(subject, text) {
     return { emailSent: false, emailError: 'Email is not configured on the server.' };
   }
   try {
-    await transporter.sendMail({ from: process.env.EMAIL_USER, to: NOTIFY_EMAIL, subject, text });
+    await transporter.sendMail({ from: mailFrom(), to: NOTIFY_EMAIL, subject, text });
     return { emailSent: true, emailError: null };
   } catch (err) {
     console.error('Saved, but email notification failed:', err);
@@ -181,7 +184,7 @@ async function notifyCustomer(to, subject, text, html) {
     return { emailSent: false, emailError: 'Email is not configured on the server.' };
   }
   try {
-    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
+    await transporter.sendMail({ from: mailFrom(), replyTo: NOTIFY_EMAIL, to, subject, text, html });
     return { emailSent: true, emailError: null };
   } catch (err) {
     console.error('Order saved, but customer confirmation email failed:', err);
@@ -330,7 +333,9 @@ async function shipFromPoint() {
 
 async function ensureDestination(order) {
   if (order.destination) return order.destination;
-  const point = await geocode(order.address);
+  // Region and postal code don't help the lookup, so only street, barangay, city and province are searched.
+  const parts = order.addressParts;
+  const point = await geocode(parts ? [parts.street, parts.barangay, parts.city, parts.province].filter(Boolean).join(', ') : order.address);
   if (!point) return null;
   order.destination = point;
   await withLock(async () => {
@@ -363,20 +368,56 @@ function orderItemLines(items) {
   return items.map(item => {
     const price = Number(item.product?.price) || 0;
     const qty = Number(item.qty) || 1;
-    return { name: item.product?.name || 'Item', size: item.size || '', qty, price, lineTotal: price * qty };
+    return {
+      name: item.product?.name || 'Item',
+      size: item.size || '',
+      image: item.product?.image || '',
+      imageScale: Number(item.product?.imageScale) || 1,
+      bg: item.product?.bg || '',
+      qty,
+      price,
+      lineTotal: price * qty,
+    };
   });
 }
 
-// Customer-safe view of an order: no email, phone, or street address (the map only gets coordinates).
+// Keeps only the first digits and the last two so the phone number is recognisable but not exposed.
+function maskPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 7) return '*'.repeat(digits.length);
+  return digits.slice(0, 3) + '*'.repeat(digits.length - 5) + digits.slice(-2);
+}
+
+// Package updates shown on the tracking page, newest first. Status changes come from the saved
+// timestamps and location updates from the admin, so older orders get a timeline too.
+function trackingEvents(order) {
+  const times = order.statusTimes || {};
+  const events = [{ at: order.createdAt, title: 'Preparing to ship', description: 'We received your order and are preparing your package.', major: true }];
+  if (times.done) events.push({ at: times.done, title: 'Packed and ready to ship', description: 'Your package is packed and waiting for the courier to pick it up.', major: true });
+  if (times.shipped) events.push({ at: times.shipped, title: 'Package picked up', description: 'Your package was collected by our carrier and is on its way.', major: true });
+  (order.locationUpdates || []).forEach(update => events.push({ at: update.at, title: 'In transit', description: `Package is now in ${update.text}.`, major: false }));
+  if (times.delivered) events.push({ at: times.delivered, title: 'Delivered', description: 'Your package has been delivered. Thank you for shopping with PYNX!', major: true });
+  // Ties keep their creation order, newest first.
+  return events
+    .map((event, index) => ({ event, index }))
+    .filter(({ event }) => event.at)
+    .sort((a, b) => Date.parse(b.event.at) - Date.parse(a.event.at) || b.index - a.index)
+    .map(({ event }) => event);
+}
+
+// Customer-safe view of an order. The link or order number plus email is what protects it, so the
+// recipient details are shown to whoever opens it, with the phone number masked.
 function publicOrder(order, map = {}) {
   const current = order.status === 'shipped' ? order.currentLocation : null;
   return {
     orderNumber: orderNumber(order),
     firstName: order.firstName,
+    recipient: { name: `${order.firstName} ${order.lastName}`.trim(), phone: maskPhone(order.contact), address: order.address },
     status: order.status || 'processing',
     createdAt: order.createdAt,
     statusUpdatedAt: order.statusUpdatedAt || null,
     statusTimes: order.statusTimes || {},
+    events: trackingEvents(order),
     estimatedDelivery: deliveryEstimate(order),
     currentLocation: current ? { text: current.text, updatedAt: current.updatedAt } : null,
     map: {
@@ -458,8 +499,50 @@ function statusEmail(order, status, link) {
   return { subject, text: `Hi ${order.firstName},\n\n${body}\n${link && status !== 'delivered' ? `\nTrack your order: ${link}\n` : ''}\n- PYNX` };
 }
 
+const clean = (value, max = 120) => String(value || '').trim().slice(0, max);
+
+// Structured Philippine address as entered at checkout; null when the required parts are missing.
+function cleanAddressParts(parts) {
+  if (!parts || typeof parts !== 'object') return null;
+  const result = {
+    region: clean(parts.region, 40),
+    province: clean(parts.province),
+    city: clean(parts.city),
+    barangay: clean(parts.barangay),
+    postalCode: clean(parts.postalCode, 12),
+    street: clean(parts.street, 200),
+  };
+  return result.province && result.city && result.barangay && result.street ? result : null;
+}
+
+const formatAddressParts = parts => [parts.street, parts.barangay, parts.city, parts.province, parts.postalCode, parts.region].filter(Boolean).join(', ');
+
+// Pin placed by the customer on the checkout map.
+function cleanPoint(point) {
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  return point && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+// Remembers whether the receipt went out so admins can see failures and resend.
+async function recordReceiptResult(orderId, result) {
+  try {
+    await withLock(async () => {
+      const orders = await loadOrders();
+      const order = orders.find(item => item.id === orderId);
+      if (!order) return;
+      order.receiptEmail = { sent: Boolean(result.emailSent), error: result.emailError || null, at: new Date().toISOString() };
+      await saveOrders(orders);
+    });
+  } catch (err) {
+    console.error('Could not record receipt email result:', err);
+  }
+}
+
 app.post('/api/orders', async (req, res) => {
-  const { firstName, lastName, address, email, contact, items = [] } = req.body;
+  const { firstName, lastName, email, contact, items = [] } = req.body;
+  const addressParts = cleanAddressParts(req.body.addressParts);
+  const address = addressParts ? formatAddressParts(addressParts) : clean(req.body.address, 400);
 
   if (!firstName || !lastName || !address || !email || !contact) {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
@@ -470,6 +553,8 @@ app.post('/api/orders', async (req, res) => {
     firstName,
     lastName,
     address,
+    ...(addressParts ? { addressParts } : {}),
+    ...(cleanPoint(req.body.location) ? { destination: cleanPoint(req.body.location) } : {}),
     email,
     contact,
     items,
@@ -506,6 +591,7 @@ app.post('/api/orders', async (req, res) => {
     receipt.text,
     receipt.html
   );
+  await recordReceiptResult(order.id, customerEmail);
 
   return res.status(201).json({
     success: true,
@@ -670,6 +756,21 @@ app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/admin/orders/:id/resend-receipt', verifyAdmin, async (req, res) => {
+  try {
+    const order = (await loadOrders()).find(item => item.id === String(req.params.id));
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+    const link = siteBaseUrl(req) ? trackingUrl(req, order) : '';
+    const receipt = receiptEmail(order, link);
+    const result = await notifyCustomer(String(order.email || '').trim(), `Your PYNX order receipt (${orderNumber(order)})`, receipt.text, receipt.html);
+    await recordReceiptResult(order.id, result);
+    return res.json({ success: true, emailSent: result.emailSent, emailError: result.emailError });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to resend the receipt.' });
+  }
+});
+
 app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const status = String(req.body.status || '');
@@ -703,10 +804,12 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
         times[status] = now;
         order.statusTimes = times;
       }
+      if (ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
       if (status !== 'shipped') {
         delete order.currentLocation;
       } else if (location) {
         order.currentLocation = { text: location, ...(point || {}), updatedAt: now };
+        order.locationUpdates = [...(order.locationUpdates || []), { text: location, at: now }];
       }
       await saveOrders(orders);
       return { order, changed, advanced: changed && ORDER_STATUSES.indexOf(status) > ORDER_STATUSES.indexOf(previous) };
