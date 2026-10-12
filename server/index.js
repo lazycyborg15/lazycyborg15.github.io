@@ -76,6 +76,28 @@ const loadContacts = () => loadCollection('contacts');
 const saveContacts = contacts => saveCollection('contacts', contacts);
 const loadProducts = () => loadCollection('products');
 const saveProducts = products => saveCollection('products', products);
+async function loadProductsWithPriceMigration() {
+  const products = await loadProducts();
+  const hasOutdatedBikiniPrice = product =>
+    product.type === 'bikini' &&
+    String(product.name || '').trim().toLowerCase() === 'pynx star bikini set' &&
+    Number(product.price) === 89;
+
+  if (!products.some(hasOutdatedBikiniPrice)) return products;
+
+  return withLock(async () => {
+    const latestProducts = await loadProducts();
+    let migrated = false;
+    const updatedProducts = latestProducts.map(product => {
+      if (!hasOutdatedBikiniPrice(product)) return product;
+      migrated = true;
+      return { ...product, price: 489, originalPrice: 489, onSale: false };
+    });
+
+    if (migrated) await saveProducts(updatedProducts);
+    return updatedProducts;
+  });
+}
 const loadCustomers = () => loadCollection('customers');
 const saveCustomers = customers => saveCollection('customers', customers);
 const loadReviews = () => loadCollection('reviews');
@@ -651,7 +673,7 @@ app.post('/api/orders/track', async (req, res) => {
 app.get('/api/products', async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
-    return res.json({ success: true, products: await loadProducts() });
+    return res.json({ success: true, products: await loadProductsWithPriceMigration() });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load products.' });
@@ -866,7 +888,7 @@ app.delete('/api/admin/orders/:id', verifyAdmin, async (req, res) => {
 
 app.get('/api/admin/products', verifyAdmin, async (req, res) => {
   try {
-    const products = await loadProducts();
+    const products = await loadProductsWithPriceMigration();
     res.set('Cache-Control', 'no-store');
     return res.json({ success: true, products });
   } catch (error) {

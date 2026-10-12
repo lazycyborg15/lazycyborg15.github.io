@@ -75,16 +75,22 @@ const API_BASE = window.PYNX_API_BASE;
    RENDER PRODUCT GRIDS
 ──────────────────────────────────────── */
 async function loadProductCatalog() {
-    const normalizeProduct = product => ({
-        ...product,
-        sizes: product.type === 'cap'
-            ? []
-            : product.type === 'bikini'
-                ? ['S', 'M', 'L']
-                : Array.isArray(product.sizes) && product.sizes.length
-                    ? product.sizes
-                    : ['S', 'M', 'L', 'XL']
-    });
+    const normalizeProduct = product => {
+        const hasOutdatedBikiniPrice = product.type === 'bikini'
+            && String(product.name || '').trim().toLowerCase() === 'pynx star bikini set'
+            && Number(product.price) === 89;
+        return {
+            ...product,
+            ...(hasOutdatedBikiniPrice ? { price: 489, originalPrice: 489, onSale: false } : {}),
+            sizes: product.type === 'cap'
+                ? []
+                : product.type === 'bikini'
+                    ? ['S', 'M', 'L']
+                    : Array.isArray(product.sizes) && product.sizes.length
+                        ? product.sizes
+                        : ['S', 'M', 'L', 'XL']
+        };
+    };
 
     function normalizeCartSizes() {
         const oldKeys = new Map();
