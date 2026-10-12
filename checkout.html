@@ -88,23 +88,23 @@
                 </div>
                 <div class="form-group">
                     <label for="checkout-province">PROVINCE:</label>
-                    <input type="text" id="checkout-province" placeholder="e.g. Cebu" autocomplete="address-level1" required>
+                    <input type="text" id="checkout-province" placeholder="Enter Province" autocomplete="address-level1" required>
                 </div>
                 <div class="form-group">
                     <label for="checkout-city">CITY / MUNICIPALITY:</label>
-                    <input type="text" id="checkout-city" placeholder="e.g. Cebu City" autocomplete="address-level2" required>
+                    <input type="text" id="checkout-city" placeholder="Enter City or Municipality" autocomplete="address-level2" required>
                 </div>
                 <div class="form-group">
                     <label for="checkout-barangay">BARANGAY:</label>
-                    <input type="text" id="checkout-barangay" placeholder="e.g. Basak San Nicolas" required>
+                    <input type="text" id="checkout-barangay" placeholder="Enter Barangay" required>
                 </div>
                 <div class="form-group">
                     <label for="checkout-postal">POSTAL CODE:</label>
-                    <input type="text" id="checkout-postal" inputmode="numeric" placeholder="e.g. 6000" autocomplete="postal-code" required>
+                    <input type="text" id="checkout-postal" inputmode="numeric" placeholder="Enter Zip Code" autocomplete="postal-code" required>
                 </div>
                 <div class="form-group">
                     <label for="checkout-street">STREET NAME, BUILDING, HOUSE NO.:</label>
-                    <input type="text" id="checkout-street" placeholder="Street name, building, house no." autocomplete="street-address" required>
+                    <input type="text" id="checkout-street" placeholder="Enter Address" autocomplete="street-address" required>
                 </div>
                 <div class="form-group">
                     <label>DELIVERY PIN:</label>
@@ -378,14 +378,27 @@
         // Items chosen in the cart drawer; falls back to the full cart when no selection was made.
         function getCheckoutItems() {
             const cartItems = getPersistedCart();
+            const catalog = typeof PRODUCTS !== 'undefined' ? PRODUCTS : [];
+            const syncedItems = cartItems.map(item => {
+                const currentProduct = catalog.find(product => String(product.id) === String(item.product?.id));
+                if (!currentProduct || JSON.stringify(item.product) === JSON.stringify(currentProduct)) return item;
+                return { ...item, product: currentProduct };
+            });
+            if (syncedItems.some((item, index) => item !== cartItems[index])) {
+                try {
+                    localStorage.setItem('pynx_cart', JSON.stringify(syncedItems));
+                } catch (err) {
+                    console.error('Failed to refresh saved cart prices:', err);
+                }
+            }
             const storedKeys = sessionStorage.getItem('pynx_checkout_keys');
-            if (!storedKeys) return cartItems;
+            if (!storedKeys) return syncedItems;
             try {
                 const keys = new Set(JSON.parse(storedKeys));
-                return cartItems.filter(item => keys.has(item.key));
+                return syncedItems.filter(item => keys.has(item.key));
             } catch (err) {
                 console.error('Failed to parse checkout selection:', err);
-                return cartItems;
+                return syncedItems;
             }
         }
 
@@ -573,6 +586,8 @@
                 return;
             }
 
+            if (window.PYNX_CATALOG_READY) await window.PYNX_CATALOG_READY;
+
             const firstName = document.getElementById('checkout-first-name').value.trim();
             const lastName = document.getElementById('checkout-last-name').value.trim();
             const parts = addressParts();
@@ -751,6 +766,6 @@
         </div>
     </aside>
 
-    <script src="js/script.js?v=20261014"></script>
+    <script src="js/script.js?v=20261016"></script>
 </body>
 </html>

@@ -1125,7 +1125,7 @@ wishlist = loadWishlist();
 toggleAdminLink();
 updateCustomerAuthLinks();
 setActiveNav();
-loadProductCatalog().finally(() => {
+window.PYNX_CATALOG_READY = loadProductCatalog().finally(() => {
     renderProducts();
     updateCartUI();
     updateWishlistBadge();
@@ -1135,6 +1135,7 @@ loadProductCatalog().finally(() => {
     updateCustomerAuthLinks();
     setActiveNav();
     initShopCollections();
+    if (typeof renderCheckoutSummary === 'function') renderCheckoutSummary();
     // Keep the cart drawer open across page navigations until the customer closes it.
     if (sessionStorage.getItem('pynx_cart_open') === 'true') openCart();
 });
