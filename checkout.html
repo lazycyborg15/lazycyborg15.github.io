@@ -87,7 +87,9 @@
             </form>
             <div class="form-success" id="checkout-success" style="display:none;">
                 <div class="check">✓</div>
-                <p>Thanks for your order. We will email you a confirmation shortly.</p>
+                <p>Thanks for your order. A receipt with a tracking link has been sent to your email.</p>
+                <p id="checkout-order-ref" style="display:none;"></p>
+                <p><a id="checkout-track-link" class="btn-primary" href="track.html" style="display:none;">Track your order</a></p>
                 <p>If you need help, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a>.</p>
             </div>
         </div>
@@ -461,6 +463,16 @@
                 }
 
                 document.getElementById('checkout-form').style.display = 'none';
+                if (result.order?.orderNumber) {
+                    const ref = document.getElementById('checkout-order-ref');
+                    ref.textContent = `Order number: ${result.order.orderNumber}`;
+                    ref.style.display = '';
+                }
+                if (result.order?.id) {
+                    const trackLink = document.getElementById('checkout-track-link');
+                    trackLink.href = `track.html?id=${encodeURIComponent(result.order.id)}`;
+                    trackLink.style.display = 'inline-block';
+                }
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
                 console.error('Checkout submission error:', error);

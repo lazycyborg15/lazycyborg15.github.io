@@ -2024,6 +2024,66 @@
             cursor: wait;
         }
 
+        .order-ref {
+            margin-left: .5rem;
+            font-size: .75rem;
+            font-weight: 600;
+            color: #6b7280;
+            letter-spacing: .04em;
+        }
+
+        .order-status-badge {
+            padding: .4rem .8rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: .85rem;
+        }
+
+        .order-status-badge.pending {
+            background: rgba(245,158,11,.14);
+            color: #b45309;
+        }
+
+        .order-status-badge.done {
+            background: #16a34a;
+            color: #fff;
+        }
+
+        .order-done-btn {
+            background: #16a34a;
+            color: #fff;
+            border: 1px solid #16a34a;
+            border-radius: 999px;
+            padding: .4rem .9rem;
+            font-size: .85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .2s ease, color .2s ease;
+        }
+
+        .order-done-btn:hover:not(:disabled) {
+            background: #15803d;
+        }
+
+        .order-done-btn.undo {
+            background: #fff;
+            color: #374151;
+            border-color: rgba(55,65,81,.35);
+        }
+
+        .order-done-btn.undo:hover:not(:disabled) {
+            background: #f3f4f6;
+        }
+
+        .order-done-btn:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+
+        .order-card.order-done {
+            border-color: rgba(22,163,74,.35);
+        }
+
         .order-card-body {
             padding: 1.5rem;
         }

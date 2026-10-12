@@ -175,13 +175,13 @@ async function notifyAdmins(subject, text) {
   }
 }
 
-async function notifyCustomer(to, subject, text) {
+async function notifyCustomer(to, subject, text, html) {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.warn('Customer email not sent: missing EMAIL_USER or EMAIL_PASS environment variables.');
     return { emailSent: false, emailError: 'Email is not configured on the server.' };
   }
   try {
-    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
+    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
     return { emailSent: true, emailError: null };
   } catch (err) {
     console.error('Order saved, but customer confirmation email failed:', err);
@@ -245,6 +245,78 @@ app.post('/api/customers/login', async (req, res) => {
   }
 });
 
+const ORDER_STATUSES = ['processing', 'done'];
+
+// Short reference shown to customers; derived from the id so older orders get one too.
+const orderNumber = order => 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+
+// Base URL used for the tracking link in emails. Set SITE_URL on the host; otherwise the request origin is used.
+function siteBaseUrl(req) {
+  const configured = process.env.SITE_URL || req.headers.origin || '';
+  return /^https?:\/\//i.test(configured) ? configured.replace(/\/+$/, '') : '';
+}
+
+const trackingUrl = (req, order) => `${siteBaseUrl(req)}/track.html?id=${encodeURIComponent(order.id)}`;
+
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+function orderItemLines(items) {
+  return items.map(item => {
+    const price = Number(item.product?.price) || 0;
+    const qty = Number(item.qty) || 1;
+    return { name: item.product?.name || 'Item', size: item.size || '', qty, price, lineTotal: price * qty };
+  });
+}
+
+// Customer-safe view of an order: no email, phone, or address.
+function publicOrder(order) {
+  return {
+    orderNumber: orderNumber(order),
+    firstName: order.firstName,
+    status: order.status || 'processing',
+    createdAt: order.createdAt,
+    statusUpdatedAt: order.statusUpdatedAt || null,
+    total: order.total,
+    items: orderItemLines(order.items || []),
+  };
+}
+
+function receiptEmail(order, link) {
+  const lines = orderItemLines(order.items || []);
+  const number = orderNumber(order);
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    `Thank you for shopping with PYNX. We've received your order.`,
+    '',
+    `Order number: ${number}`,
+    `Order placed: ${new Date(order.createdAt).toUTCString()}`,
+    '',
+    'Items:',
+    ...(lines.map(l => `${l.name}${l.size ? ` / ${l.size}` : ''} x${l.qty} - PHP ${l.lineTotal.toFixed(2)}`)),
+    '',
+    `Total: PHP ${order.total.toFixed(2)}`,
+    `Shipping address: ${order.address}`,
+    `Contact: ${order.contact}`,
+    '',
+    link ? `Track your order: ${link}` : `Quote your order number ${number} when contacting us about this order.`,
+    '',
+    '- PYNX',
+  ].join('\n');
+
+  const rows = lines.map(l => `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${escapeHtml(l.name)}${l.size ? ` <span style="color:#777">(${escapeHtml(l.size)})</span>` : ''}</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:center">x${l.qty}</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">PHP ${l.lineTotal.toFixed(2)}</td></tr>`).join('');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111">
+<h1 style="letter-spacing:.2em">PYNX</h1>
+<p>Hi ${escapeHtml(order.firstName)},</p>
+<p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
+<p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(new Date(order.createdAt).toUTCString())}</p>
+<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
+<p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
+${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
+<p>- PYNX</p></div>`;
+  return { text, html };
+}
+
 app.post('/api/orders', async (req, res) => {
   const { firstName, lastName, address, email, contact, items = [] } = req.body;
 
@@ -261,6 +333,7 @@ app.post('/api/orders', async (req, res) => {
     contact,
     items,
     total: items.reduce((sum, item) => sum + (Number(item.product?.price) || 0) * (Number(item.qty) || 0), 0),
+    status: 'processing',
     createdAt: new Date().toISOString(),
   };
 
@@ -282,13 +355,53 @@ app.post('/api/orders', async (req, res) => {
     `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
   );
 
+  const link = trackingUrl(req, order);
+  const receipt = receiptEmail(order, siteBaseUrl(req) ? link : '');
   const customerEmail = await notifyCustomer(
     String(email).trim(),
-    'Thank you for your PYNX order',
-    `Hi ${firstName},\n\nThank you for shopping with PYNX. We've received your order.\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nShipping address: ${address}\nContact: ${contact}\nOrder placed: ${order.createdAt}\n\nWe'll be in touch with updates on your order.\n\n- PYNX`
+    `Your PYNX order receipt (${orderNumber(order)})`,
+    receipt.text,
+    receipt.html
   );
 
-  return res.status(201).json({ success: true, order, emailSent, emailError, customerEmailSent: customerEmail.emailSent });
+  return res.status(201).json({
+    success: true,
+    order: { ...order, orderNumber: orderNumber(order) },
+    trackingPath: `/track.html?id=${encodeURIComponent(order.id)}`,
+    emailSent,
+    emailError,
+    customerEmailSent: customerEmail.emailSent,
+  });
+});
+
+// Customers open the link from their receipt; the unguessable order id acts as the access key.
+app.get('/api/orders/track', async (req, res) => {
+  const id = String(req.query.id || '');
+  try {
+    res.set('Cache-Control', 'no-store');
+    const order = id ? (await loadOrders()).find(item => item.id === id) : null;
+    if (!order) return res.status(404).json({ success: false, message: 'We could not find that order.' });
+    return res.json({ success: true, order: publicOrder(order) });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Unable to look up your order right now.' });
+  }
+});
+
+// Fallback for customers who lost the link: order number plus the email used at checkout.
+app.post('/api/orders/track', async (req, res) => {
+  const number = String(req.body.orderNumber || '').trim().toUpperCase();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  try {
+    const order = number && email
+      ? (await loadOrders()).find(item => item.id && orderNumber(item) === number && String(item.email || '').trim().toLowerCase() === email)
+      : null;
+    if (!order) return res.status(404).json({ success: false, message: 'No order matches that order number and email.' });
+    return res.json({ success: true, order: publicOrder(order), id: order.id });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Unable to look up your order right now.' });
+  }
 });
 
 // The public catalog is read from the same persistent store that admins edit.
@@ -410,6 +523,43 @@ app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load orders.' });
+  }
+});
+
+app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  const status = String(req.body.status || '');
+  if (!ORDER_STATUSES.includes(status)) {
+    return res.status(400).json({ success: false, message: 'Status must be "processing" or "done".' });
+  }
+  try {
+    const result = await withLock(async () => {
+      const orders = await loadOrders();
+      const order = orders.find(item => item.id === orderId);
+      if (!order) return null;
+      const changed = (order.status || 'processing') !== status;
+      order.status = status;
+      if (changed) order.statusUpdatedAt = new Date().toISOString();
+      await saveOrders(orders);
+      return { order, changed };
+    });
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    // Let the customer know once, when the order first turns Done.
+    if (result.changed && status === 'done' && result.order.email) {
+      const link = siteBaseUrl(req) ? trackingUrl(req, result.order) : '';
+      await notifyCustomer(
+        String(result.order.email).trim(),
+        `Your PYNX order ${orderNumber(result.order)} is packed and ready to ship`,
+        `Hi ${result.order.firstName},\n\nGood news! Your order ${orderNumber(result.order)} is packed and ready to ship.\n${link ? `\nTrack your order: ${link}\n` : ''}\n- PYNX`
+      );
+    }
+    return res.json({ success: true, order: result.order });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Failed to update order status.' });
   }
 });
 

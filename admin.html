@@ -308,6 +308,8 @@
                 const itemsArr = (order.items || []);
                 const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
                 const createdDate = new Date(order.createdAt).toLocaleString();
+                const isDone = order.status === 'done';
+                const orderRef = 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
                 const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
                     const name = esc(item.product?.name || 'Item');
                     const price = (Number(item.product?.price) || 0).toFixed(2);
@@ -316,11 +318,13 @@
                     const img = item.product?.image ? `<img class="item-thumb" src="${esc(item.product.image)}" alt="${name}">` : '';
                     return `<li class="item-chip">${img}<span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
                 }).join('')}</ul>` : '<span class="empty-state">No items</span>';
-                return `<div class="order-card">
+                return `<div class="order-card${isDone ? ' order-done' : ''}">
                     <div class="order-card-header">
-                        <span class="order-number">Order #${index+1}</span>
+                        <span class="order-number">Order #${index+1} <small class="order-ref">${esc(orderRef)}</small></span>
                         <div class="order-header-actions">
+                            <span class="order-status-badge ${isDone ? 'done' : 'pending'}">${isDone ? 'Done' : 'Processing'}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
+                            <button type="button" class="order-done-btn${isDone ? ' undo' : ''}" data-order-id="${esc(order.id)}" data-status="${isDone ? 'processing' : 'done'}">${isDone ? 'Undo' : 'Mark as Done'}</button>
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
                         </div>
                     </div>
@@ -418,7 +422,39 @@
         }
     }
 
+    async function setOrderStatus(orderId, status, button) {
+        const token = getToken();
+        if (!token || token === 'local-admin-session') {
+            showLogin();
+            return;
+        }
+
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/status`), {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to update order status.');
+            }
+            await fetchOrders();
+        } catch (error) {
+            console.error(error);
+            adminStatus.textContent = error.message || 'Unable to update order status.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
     ordersList.addEventListener('click', event => {
+        const doneButton = event.target.closest('.order-done-btn');
+        if (doneButton) {
+            setOrderStatus(doneButton.dataset.orderId, doneButton.dataset.status, doneButton);
+            return;
+        }
         const button = event.target.closest('.order-remove-btn');
         if (button) removeOrder(button.dataset.orderId, button);
     });

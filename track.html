@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Track Your Order | PYNX</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/config.js"></script>
+    <style>
+        .track-wrap { max-width: 640px; margin: 0 auto; padding: 140px 1.5rem 4rem; }
+        .track-card { background: #fff; border: 1px solid rgba(17,17,17,.1); border-radius: 16px; padding: 1.8rem; margin-top: 1.5rem; }
+        .track-card h3 { margin: 0 0 .3rem; }
+        .track-meta { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+        .track-steps { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+        .track-steps li { position: relative; padding: 0 0 1.4rem 2.4rem; color: #9ca3af; }
+        .track-steps li:last-child { padding-bottom: 0; }
+        .track-steps li::before { content: ''; position: absolute; left: 7px; top: 20px; bottom: 0; width: 2px; background: #e5e7eb; }
+        .track-steps li:last-child::before { display: none; }
+        .track-steps li::after { content: ''; position: absolute; left: 0; top: 3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #d1d5db; background: #fff; }
+        .track-steps li.complete { color: var(--ink); }
+        .track-steps li.complete::after { background: #16a34a; border-color: #16a34a; }
+        .track-steps li.current::after { border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.2); }
+        .track-steps strong { display: block; }
+        .track-steps small { color: #6b7280; }
+        .track-items { list-style: none; margin: 0; padding: 0; border-top: 1px solid #eee; }
+        .track-items li { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid #eee; }
+        .track-total { display: flex; justify-content: space-between; padding-top: .9rem; font-weight: 700; }
+        .track-form { display: grid; gap: .8rem; }
+        .track-form input { padding: .8rem 1rem; border: 1px solid rgba(17,17,17,.2); border-radius: 8px; font: inherit; }
+        .track-error { color: #b91c1c; margin-top: 1rem; }
+    </style>
+</head>
+<body class="checkout-page">
+<header id="site-header">
+    <a class="logo" href="index.html#home">
+        <span class="header-logo-text">PYNX</span>
+    </a>
+    <div class="header-right">
+        <nav>
+            <ul id="nav-menu">
+                <li><a href="index.html#home" class="nav-link">Home</a></li>
+                <li><a href="contact.html" class="nav-link">Contact Us</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+<main class="track-wrap">
+    <p class="section-eyebrow">Order Status</p>
+    <h2 class="section-title">Track Your Order</h2>
+
+    <div id="track-result"></div>
+
+    <form id="track-form" class="track-card track-form" style="display:none;">
+        <p style="margin:0;">Enter the order number from your receipt and the email you used at checkout.</p>
+        <input type="text" id="track-number" placeholder="Order number (e.g. PYNX-1A2B3C4D)" required>
+        <input type="email" id="track-email" placeholder="Email address" required>
+        <button type="submit" class="btn-primary form-submit">Track Order</button>
+    </form>
+    <p class="track-error" id="track-error" role="alert"></p>
+</main>
+
+<script>
+    const TRACK_API_BASE = window.PYNX_API_BASE;
+    const resultEl = document.getElementById('track-result');
+    const formEl = document.getElementById('track-form');
+    const errorEl = document.getElementById('track-error');
+
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const fmtDate = value => value ? new Date(value).toLocaleString() : '';
+
+    function renderOrder(order) {
+        const done = order.status === 'done';
+        const items = (order.items || []).map(item =>
+            `<li><span>${esc(item.name)}${item.size ? ` (${esc(item.size)})` : ''} &times; ${esc(item.qty)}</span><span>₱${Number(item.lineTotal).toFixed(2)}</span></li>`
+        ).join('');
+
+        resultEl.innerHTML = `
+            <div class="track-card">
+                <h3>${esc(order.orderNumber)}</h3>
+                <p class="track-meta">Hi ${esc(order.firstName)}, placed on ${esc(fmtDate(order.createdAt))}</p>
+                <ol class="track-steps">
+                    <li class="complete"><strong>Order received</strong><small>${esc(fmtDate(order.createdAt))}</small></li>
+                    <li class="${done ? 'complete' : 'current complete'}"><strong>Packing your order</strong><small>${done ? 'Packed' : 'We are preparing your items.'}</small></li>
+                    <li class="${done ? 'current complete' : ''}"><strong>Done &ndash; packed and ready to ship</strong><small>${done ? esc(fmtDate(order.statusUpdatedAt)) : 'Waiting'}</small></li>
+                </ol>
+                <ul class="track-items">${items}</ul>
+                <div class="track-total"><span>Total</span><span>₱${Number(order.total).toFixed(2)}</span></div>
+            </div>`;
+        formEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
+
+    async function lookup(url, options) {
+        errorEl.textContent = '';
+        try {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to find that order.');
+            return data;
+        } catch (error) {
+            errorEl.textContent = error instanceof TypeError ? 'We could not reach the store server. Please try again shortly.' : error.message;
+            return null;
+        }
+    }
+
+    async function loadById(id) {
+        const data = await lookup(`${TRACK_API_BASE}/api/orders/track?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+        if (data) renderOrder(data.order);
+        else formEl.style.display = 'grid';
+    }
+
+    formEl.addEventListener('submit', async event => {
+        event.preventDefault();
+        const data = await lookup(`${TRACK_API_BASE}/api/orders/track`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                orderNumber: document.getElementById('track-number').value,
+                email: document.getElementById('track-email').value,
+            }),
+        });
+        if (data) renderOrder(data.order);
+    });
+
+    const orderId = new URLSearchParams(window.location.search).get('id');
+    if (orderId) loadById(orderId);
+    else formEl.style.display = 'grid';
+</script>
+</body>
+</html>
