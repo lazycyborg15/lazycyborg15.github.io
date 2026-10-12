@@ -93,6 +93,19 @@
             image-rendering: auto;
         }
 
+        .logo .header-logo {
+            width: 68px;
+            max-height: 42px;
+            transition: transform .18s var(--ease), opacity .18s var(--ease);
+        }
+
+        .admin-logo .header-logo {
+            width: 130px;
+            max-width: 100%;
+            max-height: 80px;
+            margin: 0 auto;
+        }
+
         .logo {
             font-size: 1.8rem;
             font-weight: 900;
@@ -100,9 +113,6 @@
             cursor: pointer;
         }
 
-        /* Text-based logo styles (replaces PNG logos) */
-        .header-logo-text,
-        .footer-logo-text,
         .hero-logo-text {
             display: inline-block;
             font-family: 'Bebas Neue', Arial, sans-serif;
@@ -112,50 +122,22 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Header logo (compact) */
-        .header-logo-text {
-            font-size: 1.25rem;
-            letter-spacing: .35rem;
-            font-weight: 500;
-            line-height: 1;
-            color: var(--ink);
-            text-transform: uppercase;
-            display: inline-block;
-            padding: 0.06rem 0.08rem;
-            transition: transform .18s var(--ease), opacity .18s var(--ease), text-shadow .18s var(--ease);
-            text-shadow: 0 3px 8px rgba(17,17,17,0.04);
-        }
-
         .admin-logo {
             margin-bottom: 1rem;
         }
 
-        .admin-logo .header-logo-text {
-            font-size: 2rem;
-            letter-spacing: .6rem;
-            font-weight: 800;
-            padding: 0;
-            text-shadow: 0 4px 12px rgba(17,17,17,0.08);
-            color: var(--ink);
-        }
-
-        /* small hover/tap affordance for header logo */
-        .header-logo-text:hover,
-        .logo:focus .header-logo-text {
+        .logo:hover .header-logo,
+        .logo:focus-visible .header-logo {
             transform: translateY(-2px) scale(1.02);
             opacity: 0.95;
-            text-shadow: 0 6px 18px rgba(17,17,17,0.06);
         }
 
-        /* Footer logo (slightly larger) */
-        .footer-logo-text {
-            font-size: 1.3rem;
-            letter-spacing: .45rem;
-            font-weight: 400;
-            margin-bottom: .6rem;
+        .footer-logo {
             display: block;
-            color: var(--white);
-            text-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            width: 120px;
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 1rem;
         }
 
         .header-right {
@@ -683,6 +665,13 @@
             isolation: isolate;
         }
 
+        .hero-logo-image {
+            display: block;
+            width: clamp(130px, 26vw, 400px);
+            height: auto;
+            object-fit: contain;
+        }
+
         .shop-page .hero-content {
             padding-top: 16px;
             transform: translateY(-4px);
@@ -811,17 +800,13 @@
             }
 
             .logo { font-size: 1.25rem; letter-spacing: .35rem; }
+            .logo .header-logo { width: 58px; max-height: 36px; }
 
             nav ul { display: none; }
             .menu-toggle { display: flex; }
             .checkout-page .menu-toggle { display: flex; }
 
             .header-right { gap: .8rem; }
-
-            .header-logo-text {
-                font-size: 1rem;
-                letter-spacing: .32rem;
-            }
 
             .hero-content { padding-top: 62px; }
             .hero-eyebrow { font-size: .62rem; margin-bottom: 1rem; }
@@ -836,8 +821,6 @@
         @media (max-width: 480px) {
             header { height: 56px; }
             .logo { font-size: 1.05rem; letter-spacing: .28rem; }
-
-            .header-logo-text { font-size: .95rem; letter-spacing: .28rem; }
 
             .header-actions { gap: .3rem; }
             .wishlist-header-btn, .cart-btn, .menu-toggle { width: 36px; height: 36px; }
@@ -864,7 +847,7 @@
 
         /* Reduce excessive letter-spacing on very small screens */
         @media (max-width: 360px) {
-            .header-logo-text, .footer-logo-text, .hero-logo-text { letter-spacing: .25rem; }
+            .hero-logo-text { letter-spacing: .25rem; }
             nav a { letter-spacing: .12rem; }
         }
 
@@ -1506,7 +1489,7 @@
             align-items: flex-start;
         }
         .footer-brand img.footer-logo {
-            width: 280px;
+            width: 120px;
             max-width: 100%;
             margin-bottom: 1rem;
         }
@@ -3097,7 +3080,6 @@
         /* Device-specific refinements */
         @media (max-width: 480px) {
             .hero-logo-text { font-size: clamp(3.2rem, 12vw, 6.5rem); letter-spacing: .25rem; }
-            .header-logo-text { font-size: 1rem; letter-spacing: .25rem; }
             nav { display: none; }
             .menu-toggle { display: flex; }
             .hero-content { padding-top: 64px; }
@@ -3106,7 +3088,7 @@
             .modal-box { max-height: 94vh; grid-template-columns: 1fr; overflow-y: auto; }
             .modal-img { min-height: 190px; max-height: 30vh; }
             .modal-info { padding: 1.5rem; }
-            .size-grid { display: flex !important; min-height: 42px; margin-bottom: 1rem; }
+            .size-grid:not(:empty) { display: flex !important; min-height: 42px; margin-bottom: 1rem; }
             .size-opt { flex: 0 0 42px; min-width: 42px; }
             .hero::before { width: 420px; height: 420px; }
             .hero::after { width: 260px; height: 260px; }
@@ -3114,7 +3096,6 @@
 
         @media (min-width: 1200px) {
             .hero-logo-text { font-size: clamp(6.5rem, 10vw, 14rem); letter-spacing: 1.2rem; }
-            .header-logo-text { font-size: 1.35rem; letter-spacing: .48rem; }
         }
 
         /* Use transform + opacity for smoother animations on lower-end devices */
@@ -3124,4 +3105,3 @@
 
         /* Disable tap highlight and smooth text rendering */
         a, button { -webkit-tap-highlight-color: rgba(0,0,0,0); }
-

@@ -3,19 +3,19 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-                { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 49,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-one.png', bg: '#1a1a1a',
+                { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-one.png', bg: '#1a1a1a',
       desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
-    sizes: ['S','M','L','XL'] },
-                { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 59,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.png', bg: '#c9b89a',
+    sizes: [] },
+                { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.png', bg: '#c9b89a',
       desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
-    sizes: ['S','M','L','XL'] },
-                { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 79,  type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-two.png', bg: '#3a3a3a',
+    sizes: [] },
+                { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-two.png', bg: '#3a3a3a',
       desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
-    sizes: ['S','M','L','XL'] },
+    sizes: [] },
     // BIKINIS
-        { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 89,  type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', imageScale: 1.35, bg: '#1a1a1a',
+        { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 489, type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', imageScale: 1.35, bg: '#1a1a1a',
             desc: 'Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.',
-    sizes: ['S','M','L','XL'] },
+    sizes: ['Small','Medium','Large'] },
 ];
 
 /* ────────────────────────────────────────
@@ -75,34 +75,76 @@ const API_BASE = window.PYNX_API_BASE;
    RENDER PRODUCT GRIDS
 ──────────────────────────────────────── */
 async function loadProductCatalog() {
+    const normalizeProduct = product => ({
+        ...product,
+        sizes: product.type === 'cap'
+            ? []
+            : product.type === 'bikini'
+                ? ['Small', 'Medium', 'Large']
+                : Array.isArray(product.sizes) && product.sizes.length
+                    ? product.sizes
+                    : ['S', 'M', 'L', 'XL']
+    });
+
+    function normalizeCartSizes() {
+        const oldKeys = new Map();
+        let cartChanged = false;
+        const normalized = cart.map(item => {
+            const product = PRODUCTS.find(candidate => candidate.id === item.product?.id) || item.product;
+            const oldKey = item.key;
+            let size = item.size || '';
+            if (product?.type === 'cap') size = '';
+            else if (product?.type === 'bikini') {
+                size = ({ XS: 'Small', S: 'Small', M: 'Medium', L: 'Large', XL: 'Large' })[size] || size;
+            }
+            const key = `${product.id}-${size}`;
+            oldKeys.set(oldKey, key);
+            cartChanged = cartChanged || oldKey !== key || item.size !== size || item.product !== product;
+            return { ...item, key, size, product };
+        });
+
+        const deduplicated = [];
+        normalized.forEach(item => {
+            const existing = deduplicated.find(candidate => candidate.key === item.key);
+            if (existing) {
+                existing.qty += item.qty;
+                cartChanged = true;
+            } else {
+                deduplicated.push(item);
+            }
+        });
+        cart = deduplicated;
+        selectedCartKeys = new Set([...selectedCartKeys].map(key => oldKeys.get(key) || key));
+
+        try {
+            const storedKeys = sessionStorage.getItem('pynx_checkout_keys');
+            if (storedKeys) {
+                const keys = JSON.parse(storedKeys);
+                if (Array.isArray(keys)) sessionStorage.setItem('pynx_checkout_keys', JSON.stringify(keys.map(key => oldKeys.get(key) || key)));
+            }
+        } catch (err) {
+            console.error('Failed to update saved checkout selection:', err);
+        }
+        if (cartChanged) saveCart();
+    }
+
     try {
         const response = await fetch(getApiUrl(`/api/products?updated=${Date.now()}`), { cache: 'no-store' });
         if (!response.ok) throw new Error('Product catalog not available');
         const result = await response.json();
         const data = result.products;
         if (Array.isArray(data) && data.length) {
-            PRODUCTS = data.map(product => ({
-                ...product,
-                sizes: Array.isArray(product.sizes) && product.sizes.length
-                    ? product.sizes
-                    : product.type === 'bikini'
-                        ? ['XS', 'S', 'M', 'L']
-                        : ['S', 'M', 'L', 'XL']
-            }));
-            let cartChanged = false;
-            cart = cart.map(item => {
-                const currentProduct = PRODUCTS.find(product => product.id === item.product?.id);
-                if (!currentProduct) return item;
-                cartChanged = cartChanged || item.product.price !== currentProduct.price || item.product.originalPrice !== currentProduct.originalPrice || item.product.onSale !== currentProduct.onSale;
-                return { ...item, product: currentProduct };
-            });
-            if (cartChanged) saveCart();
+            PRODUCTS = data.map(normalizeProduct);
+            normalizeCartSizes();
         }
     } catch (err) {
         try {
             const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
             const data = await response.json();
-            if (Array.isArray(data) && data.length) PRODUCTS = data;
+            if (Array.isArray(data) && data.length) {
+                PRODUCTS = data.map(normalizeProduct);
+                normalizeCartSizes();
+            }
         } catch (fallbackError) {
             console.warn('Unable to load the product catalog.', fallbackError);
         }
@@ -328,7 +370,8 @@ function addFromModal() {
 
     const existingItem = editingCartKey ? cart.find(i => i.key === editingCartKey) : null;
     if (existingItem) {
-        const newKey = `${currentProduct.id}-${selectedSize}`;
+        const size = selectedSize || '';
+        const newKey = `${currentProduct.id}-${size}`;
         if (newKey !== editingCartKey) {
             const duplicate = cart.find(i => i.key === newKey);
             if (duplicate) {
@@ -336,7 +379,7 @@ function addFromModal() {
                 cart = cart.filter(i => i.key !== editingCartKey);
             } else {
                 existingItem.key = newKey;
-                existingItem.size = selectedSize;
+                existingItem.size = size;
             }
         }
         saveCart();
@@ -366,12 +409,13 @@ function quickAdd(id) {
 }
 
 function addToCart(product, size) {
-    const key = `${product.id}-${size}`;
+    const selectedSize = size || '';
+    const key = `${product.id}-${selectedSize}`;
     const existing = cart.find(i => i.key === key);
     if (existing) {
         existing.qty++;
     } else {
-        cart.push({ key, product, size, qty: 1 });
+        cart.push({ key, product, size: selectedSize, qty: 1 });
     }
     saveCart();
     updateCartUI();
@@ -412,7 +456,7 @@ function updateCartUI() {
                     <div class="ci-name">${item.product.name}</div>
                     <div class="ci-meta">${item.product.cat}${item.size ? ' — ' + item.size : ''}</div>
                     <div class="ci-actions">
-                        <button class="btn-secondary cart-action" onclick="editCartItemSize('${item.key}')">Change size</button>
+                        ${item.product.sizes?.length ? `<button class="btn-secondary cart-action" onclick="editCartItemSize('${item.key}')">Change size</button>` : ''}
                     </div>
                     <div class="ci-qty">
                         <button class="qty-btn" onclick="changeQty('${item.key}',-1)">−</button>
