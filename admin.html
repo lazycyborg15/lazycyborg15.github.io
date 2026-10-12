@@ -308,7 +308,8 @@
                 const itemsArr = (order.items || []);
                 const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
                 const createdDate = new Date(order.createdAt).toLocaleString();
-                const isDone = order.status === 'done';
+                const status = ['processing', 'done', 'shipped', 'delivered'].includes(order.status) ? order.status : 'processing';
+                const isDone = status !== 'processing';
                 const orderRef = 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
                 const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
                     const name = esc(item.product?.name || 'Item');
@@ -322,9 +323,9 @@
                     <div class="order-card-header">
                         <span class="order-number">Order #${index+1} <small class="order-ref">${esc(orderRef)}</small></span>
                         <div class="order-header-actions">
-                            <span class="order-status-badge ${isDone ? 'done' : 'pending'}">${isDone ? 'Done' : 'Processing'}</span>
+                            <span class="order-status-badge ${isDone ? 'done' : 'pending'}">${statusLabels[status]}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
-                            <button type="button" class="order-done-btn${isDone ? ' undo' : ''}" data-order-id="${esc(order.id)}" data-status="${isDone ? 'processing' : 'done'}">${isDone ? 'Undo' : 'Mark as Done'}</button>
+                            ${orderActions(order, status)}
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
                         </div>
                     </div>
@@ -346,6 +347,7 @@
                                 <label>Address:</label>
                                 <span>${esc(order.address)}</span>
                             </div>
+                            ${status === 'shipped' && order.currentLocation?.text ? `<div class="order-info-row"><label>Package at:</label><span>${esc(order.currentLocation.text)}</span></div>` : ''}
                         </div>
                         <div class="order-divider"></div>
                         <div class="order-items-section">
@@ -422,6 +424,22 @@
         }
     }
 
+    const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered' };
+
+    // Buttons for the next step, plus Undo to go one step back.
+    function orderActions(order, status) {
+        const button = (label, next, extra = '', cls = '') =>
+            `<button type="button" class="order-done-btn${cls}" data-order-id="${esc(order.id)}" data-status="${next}" ${extra}>${label}</button>`;
+        const actions = {
+            processing: button('Mark as Done', 'done'),
+            done: button('Mark as Shipped', 'shipped', 'data-ask-location="1"') + button('Undo', 'processing', '', ' undo'),
+            shipped: button('Update location', 'shipped', 'data-ask-location="1" data-require-location="1"', ' undo')
+                + button('Mark as Delivered', 'delivered') + button('Undo', 'done', '', ' undo'),
+            delivered: button('Undo', 'shipped', '', ' undo'),
+        };
+        return actions[status];
+    }
+
     async function setOrderStatus(orderId, status, button) {
         const token = getToken();
         if (!token || token === 'local-admin-session') {
@@ -429,18 +447,30 @@
             return;
         }
 
+        const payload = { status };
+        if (button.dataset.askLocation) {
+            const answer = prompt('Where is the package now? (for example: Butuan City, Agusan del Norte)\nThe customer will see it on the tracking map. Leave blank to skip.');
+            if (answer === null) return;
+            payload.location = answer.trim();
+            if (button.dataset.requireLocation && !payload.location) return;
+        }
+
         button.disabled = true;
         try {
             const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/status`), {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
+                body: JSON.stringify(payload)
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) {
                 throw new Error(data.message || 'Unable to update order status.');
             }
             await fetchOrders();
+            if (data.locationFound === false) {
+                adminStatus.textContent = 'Saved, but that location could not be placed on the map. Try a nearby city name.';
+                adminStatus.classList.add('error');
+            }
         } catch (error) {
             console.error(error);
             adminStatus.textContent = error.message || 'Unable to update order status.';

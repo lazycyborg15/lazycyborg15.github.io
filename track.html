@@ -8,12 +8,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="js/config.js"></script>
     <style>
         .track-wrap { max-width: 640px; margin: 0 auto; padding: 140px 1.5rem 4rem; }
         .track-card { background: #fff; border: 1px solid rgba(17,17,17,.1); border-radius: 16px; padding: 1.8rem; margin-top: 1.5rem; }
         .track-card h3 { margin: 0 0 .3rem; }
         .track-meta { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+        .track-map-card { padding: 0; overflow: hidden; }
+        #track-map { height: 360px; width: 100%; }
+        .track-map-note { padding: .8rem 1.2rem; font-size: .85rem; color: #6b7280; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .track-map-note a { color: #0f766e; font-weight: 700; }
+        .map-icon { font-size: 26px; line-height: 1; text-align: center; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+        .track-eta { padding: 1.2rem 1.5rem; }
+        .track-eta strong { display: block; font-size: 1.15rem; }
+        .track-eta span { color: #6b7280; font-size: .85rem; }
         .track-steps { list-style: none; margin: 0 0 1.5rem; padding: 0; }
         .track-steps li { position: relative; padding: 0 0 1.4rem 2.4rem; color: #9ca3af; }
         .track-steps li:last-child { padding-bottom: 0; }
@@ -70,27 +80,100 @@
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     const fmtDate = value => value ? new Date(value).toLocaleString() : '';
+    const STATUS_ORDER = ['processing', 'done', 'shipped', 'delivered'];
+
+    function fmtEstimate(estimate) {
+        if (!estimate) return '';
+        const day = (iso, withYear) => {
+            const [y, m, d] = iso.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined });
+        };
+        return estimate.from === estimate.to ? day(estimate.to, true) : `${day(estimate.from)} – ${day(estimate.to, true)}`;
+    }
+
+    let map = null;
+    const pin = (emoji, size) => L.divIcon({ className: '', html: `<div class="map-icon">${emoji}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+
+    // Straight lines show direction only; they are not the courier's road route.
+    function renderMap(order) {
+        const { destination, origin, current } = order.map || {};
+        const mapCard = document.getElementById('track-map-card');
+        if (!destination && !current) {
+            mapCard.style.display = 'none';
+            return;
+        }
+        if (map) { map.remove(); map = null; }
+        map = L.map('track-map', { scrollWheelZoom: false });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+        const bounds = [];
+        const add = (point, emoji, label, open) => {
+            const marker = L.marker([point.lat, point.lng], { icon: pin(emoji, 30) }).addTo(map);
+            marker.bindTooltip(label, { permanent: open, direction: 'top', offset: [0, -14] });
+            bounds.push([point.lat, point.lng]);
+        };
+        const line = (a, b, dashed) => L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: dashed ? '#9ca3af' : '#0d9488', weight: 4, dashArray: dashed ? '8 8' : null }).addTo(map);
+
+        if (origin) add(origin, '🏬', 'PYNX ' + (order.map.originLabel || ''), false);
+        if (destination) add(destination, '📍', order.status === 'delivered' ? 'Delivered here' : 'Delivery address', order.status !== 'shipped');
+        if (current) {
+            add(current, '🚚', `On the way${order.currentLocation?.text ? ' – ' + order.currentLocation.text : ''}`, true);
+            if (origin) line(origin, current, false);
+            if (destination) line(current, destination, true);
+        } else if (origin && destination) {
+            line(origin, destination, true);
+        }
+        if (bounds.length > 1) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+        else map.setView(bounds[0], 14);
+
+        const links = [];
+        if (current && destination) links.push(`<a href="https://www.google.com/maps/dir/?api=1&origin=${current.lat},${current.lng}&destination=${destination.lat},${destination.lng}" target="_blank" rel="noopener">Open route in Google Maps</a>`);
+        else if (destination) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${destination.lat},${destination.lng}" target="_blank" rel="noopener">Open in Google Maps</a>`);
+        document.getElementById('track-map-note').innerHTML = `<span>${current ? 'Latest location of your package' : 'Delivery location'}</span>${links.join('')}`;
+    }
 
     function renderOrder(order) {
-        const done = order.status === 'done';
+        const level = Math.max(0, STATUS_ORDER.indexOf(order.status));
+        const times = order.statusTimes || {};
+        const step = (index, title, note) => {
+            const cls = index < level ? 'complete' : (index === level ? 'current complete' : '');
+            return `<li class="${cls}"><strong>${title}</strong><small>${esc(note)}</small></li>`;
+        };
         const items = (order.items || []).map(item =>
             `<li><span>${esc(item.name)}${item.size ? ` (${esc(item.size)})` : ''} &times; ${esc(item.qty)}</span><span>₱${Number(item.lineTotal).toFixed(2)}</span></li>`
         ).join('');
+        const etaLabel = order.status === 'delivered' ? 'Delivered' : 'Estimated delivery';
+        const etaText = order.status === 'delivered' ? fmtDate(times.delivered) : fmtEstimate(order.estimatedDelivery);
 
         resultEl.innerHTML = `
+            <div class="track-card track-eta">
+                <span>${etaLabel}</span>
+                <strong>${esc(etaText)}</strong>
+            </div>
+            <div class="track-card track-map-card" id="track-map-card">
+                <div id="track-map"></div>
+                <div class="track-map-note" id="track-map-note"></div>
+            </div>
             <div class="track-card">
                 <h3>${esc(order.orderNumber)}</h3>
                 <p class="track-meta">Hi ${esc(order.firstName)}, placed on ${esc(fmtDate(order.createdAt))}</p>
                 <ol class="track-steps">
-                    <li class="complete"><strong>Order received</strong><small>${esc(fmtDate(order.createdAt))}</small></li>
-                    <li class="${done ? 'complete' : 'current complete'}"><strong>Packing your order</strong><small>${done ? 'Packed' : 'We are preparing your items.'}</small></li>
-                    <li class="${done ? 'current complete' : ''}"><strong>Done &ndash; packed and ready to ship</strong><small>${done ? esc(fmtDate(order.statusUpdatedAt)) : 'Waiting'}</small></li>
+                    ${step(0, 'Order received', order.status === 'processing' ? 'We are packing your order.' : fmtDate(order.createdAt))}
+                    ${step(1, 'Done &ndash; packed and ready to ship', times.done ? fmtDate(times.done) : 'Waiting')}
+                    ${step(2, 'On the way', order.currentLocation?.text ? `Now at ${order.currentLocation.text}` : (times.shipped ? fmtDate(times.shipped) : 'Waiting'))}
+                    ${step(3, 'Delivered', times.delivered ? fmtDate(times.delivered) : 'Waiting')}
                 </ol>
                 <ul class="track-items">${items}</ul>
                 <div class="track-total"><span>Total</span><span>₱${Number(order.total).toFixed(2)}</span></div>
             </div>`;
         formEl.style.display = 'none';
         errorEl.textContent = '';
+        try {
+            renderMap(order);
+        } catch (err) {
+            console.error('Map failed to load:', err);
+            document.getElementById('track-map-card').style.display = 'none';
+        }
     }
 
     async function lookup(url, options) {

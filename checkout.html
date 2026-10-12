@@ -87,8 +87,9 @@
             </form>
             <div class="form-success" id="checkout-success" style="display:none;">
                 <div class="check">✓</div>
-                <p>Thanks for your order. A receipt with a tracking link has been sent to your email.</p>
+                <p id="checkout-email-note">Thanks for your order.</p>
                 <p id="checkout-order-ref" style="display:none;"></p>
+                <p id="checkout-eta" style="display:none;"></p>
                 <p><a id="checkout-track-link" class="btn-primary" href="track.html" style="display:none;">Track your order</a></p>
                 <p>If you need help, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a>.</p>
             </div>
@@ -463,6 +464,19 @@
                 }
 
                 document.getElementById('checkout-form').style.display = 'none';
+                if (!result.customerEmailSent) console.warn('Receipt email was not sent:', result.customerEmailError);
+                document.getElementById('checkout-email-note').textContent = result.customerEmailSent
+                    ? 'Thanks for your order. A receipt with a tracking link has been sent to your email.'
+                    : 'Thanks for your order. We could not send the receipt email, so please save your order number and use the tracking button below.';
+                if (result.order?.estimatedDeliveryFrom && result.order?.estimatedDeliveryTo) {
+                    const day = (iso, withYear) => {
+                        const [y, m, d] = iso.split('-').map(Number);
+                        return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined });
+                    };
+                    const eta = document.getElementById('checkout-eta');
+                    eta.textContent = `Estimated delivery: ${day(result.order.estimatedDeliveryFrom)} – ${day(result.order.estimatedDeliveryTo, true)}`;
+                    eta.style.display = '';
+                }
                 if (result.order?.orderNumber) {
                     const ref = document.getElementById('checkout-order-ref');
                     ref.textContent = `Order number: ${result.order.orderNumber}`;

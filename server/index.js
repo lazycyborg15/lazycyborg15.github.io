@@ -245,7 +245,106 @@ app.post('/api/customers/login', async (req, res) => {
   }
 });
 
-const ORDER_STATUSES = ['processing', 'done'];
+// processing = being packed, done = packed and ready to ship, shipped = on the way.
+const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered'];
+
+// Delivery window shown to customers, counted in days from the order date.
+const DELIVERY_MIN_DAYS = Number(process.env.DELIVERY_MIN_DAYS) || 3;
+const DELIVERY_MAX_DAYS = Math.max(DELIVERY_MIN_DAYS, Number(process.env.DELIVERY_MAX_DAYS) || 7);
+// Optional shipping origin (for example "Cagayan de Oro City, Misamis Oriental") drawn on the tracking map.
+const SHIP_FROM = process.env.SHIP_FROM || '';
+const GEOCODE_COUNTRY = process.env.GEOCODE_COUNTRY !== undefined ? process.env.GEOCODE_COUNTRY : 'ph';
+// Dates are calculated in Philippine time so late-evening orders don't roll back a day.
+const STORE_UTC_OFFSET_MS = 8 * 3600 * 1000;
+
+function addDays(iso, days) {
+  const date = new Date(Date.parse(iso) + STORE_UTC_OFFSET_MS);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+const deliveryEstimate = order => ({
+  from: order.estimatedDeliveryFrom || addDays(order.createdAt, DELIVERY_MIN_DAYS),
+  to: order.estimatedDeliveryTo || addDays(order.createdAt, DELIVERY_MAX_DAYS),
+});
+
+function formatEstimate({ from, to }) {
+  const day = (value, withYear) => new Date(value + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
+  return from === to ? day(to, true) : `${day(from)} - ${day(to, true)}`;
+}
+
+const formatDateTime = iso => new Date(iso).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
+
+// Free OpenStreetMap geocoding. Usage policy allows about one request per second, so lookups are spaced out and failures are remembered briefly.
+const geocodeFailures = new Map();
+let shipFromCache = null;
+
+async function nominatimSearch(query) {
+  const params = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1' });
+  if (GEOCODE_COUNTRY) params.set('countrycodes', GEOCODE_COUNTRY);
+  const response = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
+    headers: { 'User-Agent': `PYNX-order-tracking (${NOTIFY_EMAIL})`, 'Accept-Language': 'en' },
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!response.ok) return null;
+  const [hit] = await response.json();
+  return hit ? { lat: Number(hit.lat), lng: Number(hit.lon) } : null;
+}
+
+// Tries the full address, then progressively drops the leading parts (house number, street).
+async function geocode(address) {
+  const text = String(address || '').trim();
+  if (!text) return null;
+  const failedAt = geocodeFailures.get(text);
+  if (failedAt && Date.now() - failedAt < 10 * 60 * 1000) return null;
+
+  const parts = text.split(',').map(part => part.trim()).filter(Boolean);
+  const candidates = [...new Set(parts.map((_, index) => parts.slice(index).join(', ')))].slice(0, 3);
+  // Serverless functions are cut off after ~10 seconds, so stop trying before that.
+  const deadline = Date.now() + 7000;
+  let hadError = false;
+  for (let index = 0; index < candidates.length; index++) {
+    if (index) await new Promise(resolve => setTimeout(resolve, 1100));
+    if (Date.now() > deadline) break;
+    try {
+      const point = await nominatimSearch(candidates[index]);
+      if (point) return point;
+    } catch (err) {
+      console.warn('Geocoding failed:', err.message);
+      hadError = true;
+    }
+  }
+  if (!hadError) geocodeFailures.set(text, Date.now());
+  return null;
+}
+
+async function shipFromPoint() {
+  if (!SHIP_FROM) return null;
+  if (!shipFromCache) {
+    // SHIP_FROM may also be plain coordinates ("8.4822,124.6472") to skip the lookup.
+    const coords = SHIP_FROM.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    shipFromCache = coords ? { lat: Number(coords[1]), lng: Number(coords[2]) } : await geocode(SHIP_FROM);
+  }
+  return shipFromCache;
+}
+
+async function ensureDestination(order) {
+  if (order.destination) return order.destination;
+  const point = await geocode(order.address);
+  if (!point) return null;
+  order.destination = point;
+  await withLock(async () => {
+    const orders = await loadOrders();
+    const stored = orders.find(item => item.id === order.id);
+    if (stored) {
+      stored.destination = point;
+      await saveOrders(orders);
+    }
+  });
+  return point;
+}
+
+const googleMapsUrl = address => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
 // Short reference shown to customers; derived from the id so older orders get one too.
 const orderNumber = order => 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -268,53 +367,95 @@ function orderItemLines(items) {
   });
 }
 
-// Customer-safe view of an order: no email, phone, or address.
-function publicOrder(order) {
+// Customer-safe view of an order: no email, phone, or street address (the map only gets coordinates).
+function publicOrder(order, map = {}) {
+  const current = order.status === 'shipped' ? order.currentLocation : null;
   return {
     orderNumber: orderNumber(order),
     firstName: order.firstName,
     status: order.status || 'processing',
     createdAt: order.createdAt,
     statusUpdatedAt: order.statusUpdatedAt || null,
+    statusTimes: order.statusTimes || {},
+    estimatedDelivery: deliveryEstimate(order),
+    currentLocation: current ? { text: current.text, updatedAt: current.updatedAt } : null,
+    map: {
+      destination: map.destination || null,
+      origin: map.origin || null,
+      originLabel: map.origin ? SHIP_FROM : '',
+      current: current && Number.isFinite(current.lat) ? { lat: current.lat, lng: current.lng } : null,
+    },
     total: order.total,
     items: orderItemLines(order.items || []),
   };
 }
 
+async function trackingPayload(order) {
+  let destination = null;
+  let origin = null;
+  try {
+    destination = await ensureDestination(order);
+    origin = await shipFromPoint();
+  } catch (err) {
+    console.warn('Map lookup failed:', err.message);
+  }
+  return publicOrder(order, { destination, origin });
+}
+
 function receiptEmail(order, link) {
   const lines = orderItemLines(order.items || []);
   const number = orderNumber(order);
+  const estimate = formatEstimate(deliveryEstimate(order));
+  const mapsLink = googleMapsUrl(order.address);
+  const placed = formatDateTime(order.createdAt);
   const text = [
     `Hi ${order.firstName},`,
     '',
     `Thank you for shopping with PYNX. We've received your order.`,
     '',
     `Order number: ${number}`,
-    `Order placed: ${new Date(order.createdAt).toUTCString()}`,
+    `Order placed: ${placed}`,
+    `Estimated delivery: ${estimate}`,
     '',
     'Items:',
     ...(lines.map(l => `${l.name}${l.size ? ` / ${l.size}` : ''} x${l.qty} - PHP ${l.lineTotal.toFixed(2)}`)),
     '',
     `Total: PHP ${order.total.toFixed(2)}`,
     `Shipping address: ${order.address}`,
+    `View on Google Maps: ${mapsLink}`,
     `Contact: ${order.contact}`,
     '',
-    link ? `Track your order: ${link}` : `Quote your order number ${number} when contacting us about this order.`,
+    link ? `Track your order on the map: ${link}` : `Quote your order number ${number} when contacting us about this order.`,
     '',
     '- PYNX',
   ].join('\n');
 
-  const rows = lines.map(l => `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${escapeHtml(l.name)}${l.size ? ` <span style="color:#777">(${escapeHtml(l.size)})</span>` : ''}</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:center">x${l.qty}</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">PHP ${l.lineTotal.toFixed(2)}</td></tr>`).join('');
+  const cell = 'padding:8px 0;border-bottom:1px solid #eee';
+  const rows = lines.map(l => `<tr><td style="${cell}">${escapeHtml(l.name)}${l.size ? ` <span style="color:#777">(${escapeHtml(l.size)})</span>` : ''}</td><td style="${cell};text-align:center">x${l.qty}</td><td style="${cell};text-align:right">PHP ${l.lineTotal.toFixed(2)}</td></tr>`).join('');
   const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111">
 <h1 style="letter-spacing:.2em">PYNX</h1>
 <p>Hi ${escapeHtml(order.firstName)},</p>
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
-<p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(new Date(order.createdAt).toUTCString())}</p>
+<p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
+<p style="background:#f4f4f0;padding:12px 16px;border-radius:6px"><strong>Estimated delivery:</strong> ${escapeHtml(estimate)}</p>
 <table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
-<p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
+<p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
 <p>- PYNX</p></div>`;
   return { text, html };
+}
+
+// Short updates sent when an order moves forward.
+function statusEmail(order, status, link) {
+  const number = orderNumber(order);
+  const estimate = formatEstimate(deliveryEstimate(order));
+  const messages = {
+    done: [`Your PYNX order ${number} is packed and ready to ship`, `Good news! Your order ${number} is packed and ready to ship.`],
+    shipped: [`Your PYNX order ${number} is on the way`, `Your order ${number} is on the way to you.${order.currentLocation?.text ? `\nLatest location: ${order.currentLocation.text}` : ''}\nEstimated delivery: ${estimate}`],
+    delivered: [`Your PYNX order ${number} was delivered`, `Your order ${number} has been delivered. Thank you for shopping with PYNX!`],
+  };
+  const [subject, body] = messages[status];
+  return { subject, text: `Hi ${order.firstName},\n\n${body}\n${link && status !== 'delivered' ? `\nTrack your order: ${link}\n` : ''}\n- PYNX` };
 }
 
 app.post('/api/orders', async (req, res) => {
@@ -336,6 +477,8 @@ app.post('/api/orders', async (req, res) => {
     status: 'processing',
     createdAt: new Date().toISOString(),
   };
+  order.estimatedDeliveryFrom = addDays(order.createdAt, DELIVERY_MIN_DAYS);
+  order.estimatedDeliveryTo = addDays(order.createdAt, DELIVERY_MAX_DAYS);
 
   try {
     await appendItem('orders', order);
@@ -371,6 +514,7 @@ app.post('/api/orders', async (req, res) => {
     emailSent,
     emailError,
     customerEmailSent: customerEmail.emailSent,
+    customerEmailError: customerEmail.emailError,
   });
 });
 
@@ -381,7 +525,7 @@ app.get('/api/orders/track', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     const order = id ? (await loadOrders()).find(item => item.id === id) : null;
     if (!order) return res.status(404).json({ success: false, message: 'We could not find that order.' });
-    return res.json({ success: true, order: publicOrder(order) });
+    return res.json({ success: true, order: await trackingPayload(order) });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Unable to look up your order right now.' });
@@ -397,7 +541,7 @@ app.post('/api/orders/track', async (req, res) => {
       ? (await loadOrders()).find(item => item.id && orderNumber(item) === number && String(item.email || '').trim().toLowerCase() === email)
       : null;
     if (!order) return res.status(404).json({ success: false, message: 'No order matches that order number and email.' });
-    return res.json({ success: true, order: publicOrder(order), id: order.id });
+    return res.json({ success: true, order: await trackingPayload(order), id: order.id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Unable to look up your order right now.' });
@@ -529,34 +673,55 @@ app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
 app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const status = String(req.body.status || '');
+  const location = String(req.body.location || '').trim().slice(0, 200);
   if (!ORDER_STATUSES.includes(status)) {
-    return res.status(400).json({ success: false, message: 'Status must be "processing" or "done".' });
+    return res.status(400).json({ success: false, message: `Status must be one of: ${ORDER_STATUSES.join(', ')}.` });
   }
+  if (location && status !== 'shipped') {
+    return res.status(400).json({ success: false, message: 'A current location can only be set while an order is shipped.' });
+  }
+
   try {
+    // Looked up before taking the write lock because geocoding can take a few seconds.
+    const point = location ? await geocode(location) : null;
+
     const result = await withLock(async () => {
       const orders = await loadOrders();
       const order = orders.find(item => item.id === orderId);
       if (!order) return null;
-      const changed = (order.status || 'processing') !== status;
+
+      const previous = order.status || 'processing';
+      const changed = previous !== status;
+      const now = new Date().toISOString();
       order.status = status;
-      if (changed) order.statusUpdatedAt = new Date().toISOString();
+      if (changed) {
+        order.statusUpdatedAt = now;
+        const times = order.statusTimes || {};
+        ORDER_STATUSES.forEach((name, index) => {
+          if (index > ORDER_STATUSES.indexOf(status)) delete times[name];
+        });
+        times[status] = now;
+        order.statusTimes = times;
+      }
+      if (status !== 'shipped') {
+        delete order.currentLocation;
+      } else if (location) {
+        order.currentLocation = { text: location, ...(point || {}), updatedAt: now };
+      }
       await saveOrders(orders);
-      return { order, changed };
+      return { order, changed, advanced: changed && ORDER_STATUSES.indexOf(status) > ORDER_STATUSES.indexOf(previous) };
     });
     if (!result) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
 
-    // Let the customer know once, when the order first turns Done.
-    if (result.changed && status === 'done' && result.order.email) {
+    // Tell the customer when the order moves forward (never when an admin undoes a step).
+    if (result.advanced && status !== 'processing' && result.order.email) {
       const link = siteBaseUrl(req) ? trackingUrl(req, result.order) : '';
-      await notifyCustomer(
-        String(result.order.email).trim(),
-        `Your PYNX order ${orderNumber(result.order)} is packed and ready to ship`,
-        `Hi ${result.order.firstName},\n\nGood news! Your order ${orderNumber(result.order)} is packed and ready to ship.\n${link ? `\nTrack your order: ${link}\n` : ''}\n- PYNX`
-      );
+      const mail = statusEmail(result.order, status, link);
+      await notifyCustomer(String(result.order.email).trim(), mail.subject, mail.text);
     }
-    return res.json({ success: true, order: result.order });
+    return res.json({ success: true, order: result.order, locationFound: location ? Boolean(point) : undefined });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to update order status.' });
