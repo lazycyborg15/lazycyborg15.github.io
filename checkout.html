@@ -596,6 +596,10 @@
             const email = document.getElementById('checkout-email').value.trim();
             const contact = document.getElementById('checkout-contact').value.trim();
             const cartItems = getCheckoutItems();
+            if (cartItems.length === 0) {
+                alert('Your bag is empty. Add an item before placing an order.');
+                return;
+            }
             const items = cartItems.map(item => ({
                 product: {
                     id: item.product?.id,
@@ -646,6 +650,11 @@
                     throw new Error(message);
                 }
 
+                if (typeof removePurchasedCartItems === 'function') {
+                    removePurchasedCartItems(cartItems);
+                } else {
+                    console.error('Could not clear purchased items because the cart helper is unavailable.');
+                }
                 const checkoutLayout = document.querySelector('.checkout-layout');
                 if (checkoutLayout) checkoutLayout.style.minHeight = `${checkoutLayout.scrollHeight}px`;
                 document.getElementById('checkout-form').style.display = 'none';

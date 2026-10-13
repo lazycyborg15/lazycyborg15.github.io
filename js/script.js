@@ -445,8 +445,24 @@ function addToCart(product, size) {
     }
     saveCart();
     updateCartUI();
+    if (wishlist.some(id => String(id) === String(product.id))) {
+        wishlist = wishlist.filter(id => String(id) !== String(product.id));
+        selectedWishlistIds.delete(product.id);
+        saveWishlist();
+        renderWishlistUI();
+        updateWishlistBadge();
+    }
     showToast(`${product.name} added to cart`);
     return true;
+}
+
+function removePurchasedCartItems(items) {
+    const keys = new Set(items.map(item => item.key || `${item.product?.id}-${item.size || ''}`));
+    cart = loadCart().filter(item => !keys.has(item.key || `${item.product?.id}-${item.size || ''}`));
+    selectedCartKeys = new Set([...selectedCartKeys].filter(key => cart.some(item => item.key === key)));
+    saveCart();
+    updateCartUI();
+    sessionStorage.removeItem('pynx_checkout_keys');
 }
 
 function updateCartUI() {
