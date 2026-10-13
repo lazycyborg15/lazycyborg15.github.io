@@ -284,7 +284,7 @@ app.post('/api/customers/login', async (req, res) => {
 });
 
 // processing = being packed, done = packed and ready to ship, shipped = on the way.
-const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered'];
+const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'cancelled'];
 
 // Delivery window shown to customers, counted in days from the order date.
 const DELIVERY_MIN_DAYS = Number(process.env.DELIVERY_MIN_DAYS) || 3;
@@ -432,6 +432,7 @@ function trackingEvents(order) {
   if (times.shipped) events.push({ at: times.shipped, title: 'Package picked up', description: 'Your package was collected by our carrier and is on its way.', major: true });
   (order.locationUpdates || []).forEach(update => events.push({ at: update.at, title: 'In transit', description: `Package is now in ${update.text}.`, major: false }));
   if (times.delivered) events.push({ at: times.delivered, title: 'Delivered', description: 'Your package has been delivered. Thank you for shopping with PYNX!', major: true });
+  if (times.cancelled) events.push({ at: times.cancelled, title: 'Order cancelled', description: 'This order was cancelled by the store.', major: true });
   // Ties keep their creation order, newest first.
   return events
     .map((event, index) => ({ event, index }))
@@ -582,6 +583,12 @@ app.post('/api/orders', async (req, res) => {
   if (!firstName || !lastName || !address || !email || !contact) {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Your cart is empty.' });
+  }
+  if (items.some(item => !item || !Number.isInteger(Number(item.qty)) || Number(item.qty) < 1)) {
+    return res.status(400).json({ success: false, message: 'Order quantities must be whole numbers greater than zero.' });
+  }
 
   const order = {
     id: crypto.randomUUID(),
@@ -593,6 +600,7 @@ app.post('/api/orders', async (req, res) => {
     email,
     contact,
     items,
+    inventoryReservations: [],
     total: items.reduce((sum, item) => sum + (Number(item.product?.price) || 0) * (Number(item.qty) || 0), 0),
     status: 'processing',
     createdAt: new Date().toISOString(),
@@ -601,7 +609,49 @@ app.post('/api/orders', async (req, res) => {
   order.estimatedDeliveryTo = addDays(order.createdAt, DELIVERY_MAX_DAYS);
 
   try {
-    await appendItem('orders', order);
+    const result = await withLock(async () => {
+      const products = await loadProducts();
+      const quantities = new Map();
+      for (const item of items) {
+        const productId = String(item.product?.id ?? '');
+        const product = products.find(candidate => String(candidate.id) === productId);
+        if (!product) return { error: `Product ${item.product?.name || ''} is no longer available. Please refresh your cart.` };
+        quantities.set(productId, (quantities.get(productId) || 0) + Number(item.qty));
+      }
+
+      for (const [productId, quantity] of quantities) {
+        const product = products.find(candidate => String(candidate.id) === productId);
+        if (Number.isInteger(product.stock) && product.stock < quantity) {
+          return { error: `${product.name} does not have enough stock. Available: ${product.stock}.` };
+        }
+      }
+
+      const originalProducts = products.map(product => ({ ...product }));
+      quantities.forEach((quantity, productId) => {
+        const product = products.find(candidate => String(candidate.id) === productId);
+        if (Number.isInteger(product.stock)) {
+          product.stock -= quantity;
+          order.inventoryReservations.push({ productId, quantity });
+        }
+      });
+
+      try {
+        await saveProducts(products);
+        const orders = await loadOrders();
+        await saveOrders([...orders, order]);
+      } catch (error) {
+        try {
+          await saveProducts(originalProducts);
+        } catch (rollbackError) {
+          console.error('Failed to roll back inventory after order save failed:', rollbackError);
+        }
+        throw error;
+      }
+      return { saved: true };
+    });
+    if (result.error) {
+      return res.status(409).json({ success: false, message: result.error });
+    }
   } catch (error) {
     console.error('Failed to save order:', error);
     return res.status(500).json({ success: false, message: 'Order save failed. Please try again later.' });
@@ -827,8 +877,14 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
       if (!order) return null;
 
       const previous = order.status || 'processing';
+      if (previous === 'cancelled' && status !== 'cancelled') return { invalid: 'Cancelled orders cannot be reopened.' };
+      if (status === 'cancelled' && !['processing', 'done', 'cancelled'].includes(previous)) {
+        return { invalid: 'Only orders that have not shipped can be cancelled.' };
+      }
       const changed = previous !== status;
       const now = new Date().toISOString();
+      let inventoryRollback = null;
+      let inventoryToSave = null;
       order.status = status;
       if (changed) {
         order.statusUpdatedAt = now;
@@ -839,18 +895,43 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
         times[status] = now;
         order.statusTimes = times;
       }
-      if (ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
+      if (changed && status === 'cancelled') {
+        const products = await loadProducts();
+        inventoryRollback = products.map(product => ({ ...product }));
+        for (const reservation of order.inventoryReservations || []) {
+          const product = products.find(candidate => String(candidate.id) === String(reservation.productId));
+          if (product && Number.isInteger(product.stock)) product.stock += Number(reservation.quantity) || 0;
+        }
+        inventoryToSave = products;
+      }
+      if (status === 'cancelled' || ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
       if (status !== 'shipped') {
         delete order.currentLocation;
       } else if (location) {
         order.currentLocation = { text: location, ...(point || {}), updatedAt: now };
         order.locationUpdates = [...(order.locationUpdates || []), { text: location, at: now }];
       }
-      await saveOrders(orders);
-      return { order, changed, advanced: changed && ORDER_STATUSES.indexOf(status) > ORDER_STATUSES.indexOf(previous) };
+      try {
+        if (inventoryToSave) await saveProducts(inventoryToSave);
+        await saveOrders(orders);
+      } catch (error) {
+        if (inventoryRollback) {
+          try {
+            await saveProducts(inventoryRollback);
+          } catch (rollbackError) {
+            console.error('Failed to roll back inventory after order cancellation failed:', rollbackError);
+          }
+        }
+        throw error;
+      }
+      const flowStatuses = ORDER_STATUSES.filter(name => name !== 'cancelled');
+      return { order, changed, advanced: changed && flowStatuses.includes(status) && flowStatuses.includes(previous) && flowStatuses.indexOf(status) > flowStatuses.indexOf(previous) };
     });
     if (!result) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    if (result.invalid) {
+      return res.status(409).json({ success: false, message: result.invalid });
     }
 
     // Tell the customer when the order moves forward (never when an admin undoes a step).
@@ -899,7 +980,7 @@ app.get('/api/admin/products', verifyAdmin, async (req, res) => {
 
 app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
   const productId = Number(req.params.id);
-  const { price, originalPrice, onSale } = req.body;
+  const { price, originalPrice, onSale, stock } = req.body;
 
   if (Number.isNaN(productId)) {
     return res.status(400).json({ success: false, message: 'Invalid product ID.' });
@@ -907,6 +988,9 @@ app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
 
   if (typeof price !== 'number' || price < 0) {
     return res.status(400).json({ success: false, message: 'Price must be a non-negative number.' });
+  }
+  if (stock !== null && stock !== undefined && (!Number.isInteger(stock) || stock < 0)) {
+    return res.status(400).json({ success: false, message: 'Stock must be a whole number of zero or more, or null when not tracked.' });
   }
 
   try {
@@ -921,6 +1005,8 @@ app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
       products[index].originalPrice = savedOriginalPrice;
       products[index].onSale = Boolean(onSale);
       products[index].price = products[index].onSale ? price : savedOriginalPrice;
+      if (stock === null) delete products[index].stock;
+      else if (stock !== undefined) products[index].stock = stock;
 
       await saveProducts(products);
       return products[index];

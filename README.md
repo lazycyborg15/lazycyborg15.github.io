@@ -38,7 +38,7 @@ The React app will run in development mode and the Express server will run on po
 ## Shared data and second-device testing
 
 - The Express server is in `/server`
-- Product prices and discounts are stored in `/data/products.json`.
+- Product prices, discounts, and admin-managed stock counts are stored in `/data/products.json`. Stock starts untracked until an admin enters a count; checkout checks and decrements tracked stock, and cancelling an unshipped order restores it.
 - Orders are stored in `/data/orders.json` and are available to the authenticated admin dashboard.
 - Public product data is served by `GET /api/products`; orders are submitted through `POST /api/orders`.
 - Health check: `GET /api/health`
@@ -84,10 +84,11 @@ All `/api/admin/*` routes need `Authorization: Bearer <token>` from `POST /api/a
 | --- | --- |
 | `POST /api/admin/login` | Staff login, returns a 2-hour token |
 | `GET /api/admin/orders` | All orders, newest first |
+| `PATCH /api/admin/orders/:id/status` | Update order status or cancel an order before it ships |
 | `GET /api/admin/contacts` | Customer concerns |
 | `GET /api/admin/reviews` | Customer reviews |
 | `GET /api/admin/products` | Product catalog |
-| `PUT /api/admin/products/:id` | Update price, original price, sale flag |
+| `PUT /api/admin/products/:id` | Update price, original price, sale flag, and stock count |
 
 Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `POST /api/contact`, `POST /api/reviews`, `GET /api/products`, `GET /api/health`.
 

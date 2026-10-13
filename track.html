@@ -141,7 +141,7 @@
     function renderMap(order) {
         const { destination, origin, current } = order.map || {};
         const mapCard = document.getElementById('track-map-card');
-        if (!destination && !current) {
+        if (order.status === 'cancelled' || (!destination && !current)) {
             mapCard.style.display = 'none';
             return;
         }
@@ -175,7 +175,7 @@
         document.getElementById('track-map-note').innerHTML = `<span>${current ? 'Latest location of your package' : 'Delivery location'}</span>${links.join('')}`;
     }
 
-    const STATUS_TITLES = { processing: 'Preparing your order', done: 'Waiting for courier', shipped: 'In transit', delivered: 'Order delivered' };
+    const STATUS_TITLES = { processing: 'Preparing your order', done: 'Waiting for courier', shipped: 'In transit', delivered: 'Order delivered', cancelled: 'Order cancelled' };
     const PROGRESS_LABELS = ['Order placed', 'Waiting for courier', 'In transit', 'Order delivered'];
     const BOX_ICON = '<svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3.3 7.5L12 12.5l8.7-5M12 22V12.5"/></svg>';
 
@@ -200,6 +200,7 @@
     function renderOrder(order) {
         const level = Math.max(0, STATUS_ORDER.indexOf(order.status));
         const delivered = order.status === 'delivered';
+        const cancelled = order.status === 'cancelled';
         const recipient = order.recipient || {};
         const items = (order.items || []).map(item => {
             const thumb = item.image
@@ -215,18 +216,20 @@
             const cls = index < level ? 'complete' : (index === level ? 'current complete' : '');
             return `<div class="progress-step ${cls}"><span class="dot">${index === level ? BOX_ICON : ''}</span><span>${label}</span></div>`;
         }).join('');
-        const arriving = delivered
-            ? `Delivered on <strong>${esc(fmtDay(order.statusTimes?.delivered))}</strong>`
-            : `Arriving <strong>${esc(fmtEstimate(order.estimatedDelivery))}</strong>`;
+        const arriving = cancelled
+            ? `Cancelled on <strong>${esc(fmtDay(order.statusTimes?.cancelled))}</strong>`
+            : delivered
+                ? `Delivered on <strong>${esc(fmtDay(order.statusTimes?.delivered))}</strong>`
+                : `Arriving <strong>${esc(fmtEstimate(order.estimatedDelivery))}</strong>`;
 
         resultEl.innerHTML = `
             <section class="track-section track-hero">
                 <h1>${esc(STATUS_TITLES[order.status] || STATUS_TITLES.processing)}</h1>
                 <p>${arriving}</p>
-                <div class="track-progress">
+                ${cancelled ? '' : `<div class="track-progress">
                     <span class="fill" style="width:${(level / 3) * 75}%"></span>
                     ${steps}
-                </div>
+                </div>`}
             </section>
             <section class="track-section track-map-card" id="track-map-card">
                 <div id="track-map"></div>

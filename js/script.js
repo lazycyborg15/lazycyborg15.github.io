@@ -71,6 +71,10 @@ function saveWishlist() {
 
 const API_BASE = window.PYNX_API_BASE;
 
+function hasTrackedStock(product) {
+    return Number.isInteger(product.stock) && product.stock >= 0;
+}
+
 /* ────────────────────────────────────────
    RENDER PRODUCT GRIDS
 ──────────────────────────────────────── */
@@ -196,9 +200,11 @@ function cardHTML(p) {
     const priceHTML = canBuy ? `<div class="product-price${isDiscount ? ' sale' : ''}">₱${currentPrice.toFixed(2)}</div>` : '';
     const originalPriceHTML = canBuy && isDiscount ? `<div class="product-original-price">₱${originalPrice.toFixed(2)}</div>` : '';
     const saleBadge = isDiscount ? `<span class="product-sale-badge">Sale</span>` : '';
+    const soldOut = hasTrackedStock(p) && p.stock === 0;
+    const stockNote = canBuy && soldOut ? '<div class="product-stock-note">Out of stock</div>' : '';
     const actionOverlay = canBuy ? `
             <div class="product-overlay">
-                <button class="quick-add" onclick="event.stopPropagation();quickAdd(${p.id})">Quick Add</button>
+                <button class="quick-add" ${soldOut ? 'disabled' : ''} onclick="event.stopPropagation();quickAdd(${p.id})">${soldOut ? 'Out of Stock' : 'Add to Bag'}</button>
             </div>` : '';
     const wishlistButton = `
             <button class="wishlist-btn" onclick="event.stopPropagation();toggleWishlist(this)" aria-label="Wishlist">
@@ -218,6 +224,7 @@ function cardHTML(p) {
             <div class="product-category">${p.cat}</div>
             ${priceHTML}
             ${originalPriceHTML}
+            ${stockNote}
         </div>
     </div>`;
 }
@@ -254,6 +261,8 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     modalPriceEl.textContent = `₱${p.price}.00`;
     modalPriceEl.style.display = '';
     modalAddBtn.style.display = canBuy ? '' : 'none';
+    modalAddBtn.disabled = hasTrackedStock(p) && p.stock === 0;
+    if (canBuy) modalAddBtn.textContent = modalAddBtn.disabled ? 'Out of Stock' : 'Add to Bag';
 
     if (canBuy && p.sizes && p.sizes.length) {
         sizeLabelEl.textContent = 'Choose Your Size';
@@ -369,6 +378,10 @@ function saveAdminProduct() {
 function addFromModal() {
     if (!currentProduct) return;
     if (!document.body.classList.contains('shop-page') && !document.body.classList.contains('index-page')) return;
+    if (hasTrackedStock(currentProduct) && currentProduct.stock === 0) {
+        showToast('This item is out of stock');
+        return;
+    }
     if (currentProduct.sizes && currentProduct.sizes.length && !selectedSize) {
         showToast('Please choose a size');
         return;
@@ -392,7 +405,7 @@ function addFromModal() {
         updateCartUI();
         showToast('Cart item updated');
     } else {
-        addToCart(currentProduct, selectedSize);
+        if (!addToCart(currentProduct, selectedSize)) return;
     }
 
     editingCartKey = null;
@@ -418,6 +431,13 @@ function addToCart(product, size) {
     const selectedSize = size || '';
     const key = `${product.id}-${selectedSize}`;
     const existing = cart.find(i => i.key === key);
+    const quantityInCart = cart
+        .filter(item => String(item.product.id) === String(product.id))
+        .reduce((sum, item) => sum + item.qty, 0);
+    if (hasTrackedStock(product) && quantityInCart >= product.stock) {
+        showToast(product.stock === 0 ? 'This item is out of stock' : 'No more stock available for this item');
+        return false;
+    }
     if (existing) {
         existing.qty++;
     } else {
@@ -426,6 +446,7 @@ function addToCart(product, size) {
     saveCart();
     updateCartUI();
     showToast(`${product.name} added to cart`);
+    return true;
 }
 
 function updateCartUI() {
@@ -488,6 +509,15 @@ function updateCartUI() {
 function changeQty(key, delta) {
     const item = cart.find(i => i.key === key);
     if (!item) return;
+    if (delta > 0 && hasTrackedStock(item.product)) {
+        const quantityInCart = cart
+            .filter(candidate => String(candidate.product.id) === String(item.product.id))
+            .reduce((sum, candidate) => sum + candidate.qty, 0);
+        if (quantityInCart >= item.product.stock) {
+            showToast('No more stock available for this item');
+            return;
+        }
+    }
     item.qty += delta;
     if (item.qty <= 0) {
         cart = cart.filter(i => i.key !== key);
@@ -856,6 +886,141 @@ function showToast(msg) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
+
+/* ────────────────────────────────────────
+   LEGAL & COOKIE SETTINGS
+──────────────────────────────────────── */
+const POLICY_VERSION = '2026-10';
+const POLICY_CONTENT = {
+    'privacy policy': {
+        title: 'Privacy Policy',
+        content: `<p>We use the information you provide to process and deliver your orders, provide customer support, and send order updates.</p>
+            <h3>Information we collect</h3>
+            <p>When you place an order, we collect details such as your name, email address, phone number, delivery address, and the products you ordered. If you contact us, we use the information in your message to respond.</p>
+            <h3>How information is used</h3>
+            <p>Order and contact information is used to operate the PYNX store, coordinate delivery, respond to requests, and maintain store records. We do not sell personal information.</p>
+            <h3>Storage and service providers</h3>
+            <p>Information is stored by the services that operate the store and may be shared with delivery or email providers as needed to complete an order or send a requested message. We take reasonable steps to protect stored information.</p>
+            <h3>Your choices</h3>
+            <p>Contact us through the Contact Us page if you have a privacy question or want to request help with information associated with your order.</p>`
+    },
+    'terms of service': {
+        title: 'Terms of Service',
+        content: `<p>By placing an order with PYNX, you agree to the following store terms.</p>
+            <h3>Orders and availability</h3>
+            <p>Orders are subject to product availability and confirmation. If an item becomes unavailable or an order cannot be fulfilled, we will contact you using the details provided at checkout.</p>
+            <h3>Prices and product details</h3>
+            <p>Prices are shown in Philippine pesos and may change before an order is placed. We make reasonable efforts to show accurate product details and availability.</p>
+            <h3>Delivery</h3>
+            <p>Delivery estimates are approximate and may be affected by the courier or circumstances outside our control. Use the order tracking link for the latest status.</p>
+            <h3>Contact</h3>
+            <p>For questions about an order, use the Contact Us page and include your order number where possible.</p>`
+    },
+    'cookie settings': {
+        title: 'Cookie Settings',
+        content: `<p>PYNX uses essential browser storage to remember shopping-cart and wishlist choices and support basic site functions. These features are required for the store to work.</p>
+            <p>Optional analytics or advertising cookies are not enabled by this site. You can change your choice below at any time.</p>
+            <label class="policy-essential-option"><input type="checkbox" checked disabled> Essential storage (always active)</label>
+            <label class="policy-optional-option"><input type="checkbox" id="policy-optional-cookies"> Optional cookies</label>`
+    }
+};
+
+function initPolicyPopups() {
+    const footerLinks = document.querySelectorAll('.footer-bottom-links a');
+    if (!footerLinks.length) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'policy-modal';
+    modal.id = 'policy-modal';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `<div class="policy-modal-backdrop" data-policy-close></div>
+        <section class="policy-modal-card" role="dialog" aria-modal="true" aria-labelledby="policy-modal-title" aria-describedby="policy-modal-content">
+            <button type="button" class="policy-modal-close" data-policy-close aria-label="Close dialog">×</button>
+            <p class="section-eyebrow">PYNX STORE</p>
+            <h2 id="policy-modal-title"></h2>
+            <div class="policy-modal-content" id="policy-modal-content"></div>
+            <p class="policy-agreement-note" id="policy-agreement-note">By selecting “I Agree,” you confirm that you have read and agree to this policy.</p>
+            <div class="policy-modal-actions">
+                <button type="button" class="btn-secondary" data-policy-close>Close</button>
+                <button type="button" class="btn-primary" id="policy-agree">I Agree</button>
+            </div>
+        </section>`;
+    document.body.appendChild(modal);
+
+    let activePolicy = '';
+    let previousFocus = null;
+    const closeModal = () => {
+        modal.classList.remove('show');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('policy-modal-open');
+        previousFocus?.focus();
+    };
+    const openModal = policyKey => {
+        const policy = POLICY_CONTENT[policyKey];
+        if (!policy) return;
+        activePolicy = policyKey;
+        previousFocus = document.activeElement;
+        modal.querySelector('#policy-modal-title').textContent = policy.title;
+        modal.querySelector('#policy-modal-content').innerHTML = policy.content;
+        const note = modal.querySelector('#policy-agreement-note');
+        const agreeButton = modal.querySelector('#policy-agree');
+        const optionalCookies = modal.querySelector('#policy-optional-cookies');
+        const storedOptional = localStorage.getItem('pynx_optional_cookies') === 'true';
+        if (optionalCookies) optionalCookies.checked = storedOptional;
+        if (policyKey === 'cookie settings') {
+            note.textContent = 'Save your cookie choice. Essential storage stays active so the store can work.';
+            agreeButton.textContent = 'Save Preferences';
+        } else {
+            note.textContent = 'By selecting “I Agree,” you confirm that you have read and agree to this policy.';
+            agreeButton.textContent = 'I Agree';
+        }
+        modal.classList.add('show');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('policy-modal-open');
+        modal.querySelector('.policy-modal-close').focus();
+    };
+
+    footerLinks.forEach(link => {
+        const policyKey = link.textContent.trim().toLowerCase();
+        if (!POLICY_CONTENT[policyKey]) return;
+        link.addEventListener('click', event => {
+            event.preventDefault();
+            openModal(policyKey);
+        });
+    });
+
+    modal.addEventListener('click', event => {
+        if (event.target.closest('[data-policy-close]')) closeModal();
+        if (event.target.closest('#policy-agree')) {
+            if (activePolicy === 'cookie settings') {
+                const optionalCookies = modal.querySelector('#policy-optional-cookies');
+                localStorage.setItem('pynx_optional_cookies', String(Boolean(optionalCookies?.checked)));
+            } else {
+                const agreements = JSON.parse(localStorage.getItem('pynx_policy_agreements') || '{}');
+                agreements[activePolicy] = { version: POLICY_VERSION, agreedAt: new Date().toISOString() };
+                localStorage.setItem('pynx_policy_agreements', JSON.stringify(agreements));
+            }
+            closeModal();
+            showToast(activePolicy === 'cookie settings' ? 'Cookie preferences saved' : 'Your agreement has been recorded');
+        }
+    });
+    modal.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeModal();
+        if (event.key === 'Tab') {
+            const focusable = [...modal.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    });
+}
+initPolicyPopups();
 
 /* ────────────────────────────────────────
    MOBILE MENU

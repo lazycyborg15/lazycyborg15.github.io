@@ -61,7 +61,7 @@
                     <button id="tab-orders" class="tab-button active" onclick="switchAdminTab('orders')">Orders</button>
                     <button id="tab-contacts" class="tab-button" onclick="switchAdminTab('contacts')">Customer Concerns</button>
                     <button id="tab-reviews" class="tab-button" onclick="switchAdminTab('reviews')">Reviews</button>
-                    <button id="tab-products" class="tab-button" onclick="switchAdminTab('products')">Products</button>
+                    <button id="tab-products" class="tab-button" onclick="switchAdminTab('products')">Products &amp; Inventory</button>
                 </div>
 
                 <div id="orders-section" class="admin-tab-section">
@@ -131,12 +131,17 @@
                         <div class="dashboard-card">
                             <h2>Products</h2>
                             <strong id="product-count">0</strong>
-                            <p class="card-note">Editable product catalog.</p>
+                            <p class="card-note">Edit prices, discounts, and stock counts.</p>
                         </div>
                         <div class="dashboard-card">
                             <h2>Sale Items</h2>
                             <strong id="sale-count">0</strong>
                             <p class="card-note">Items marked discount.</p>
+                        </div>
+                        <div class="dashboard-card">
+                            <h2>Inventory Units</h2>
+                            <strong id="inventory-count">—</strong>
+                            <p class="card-note" id="inventory-note">Available stock across tracked products.</p>
                         </div>
                     </div>
                     <div class="auth-note admin-status" id="products-status">Loading products...</div>
@@ -297,10 +302,11 @@
                 const itemsArr = (order.items || []);
                 const orderTotal = calculateOrderTotal(itemsArr);
                 orderTotals.push(orderTotal);
-                totalRevenue += orderTotal;
+                if (order.status !== 'cancelled') totalRevenue += orderTotal;
             });
             
-            const avgOrder = data.orders.length > 0 ? totalRevenue / data.orders.length : 0;
+            const activeOrderCount = data.orders.filter(order => order.status !== 'cancelled').length;
+            const avgOrder = activeOrderCount > 0 ? totalRevenue / activeOrderCount : 0;
             document.getElementById('total-revenue').textContent = `₱${totalRevenue.toFixed(2)}`;
             document.getElementById('avg-order').textContent = `₱${avgOrder.toFixed(2)}`;
             
@@ -308,8 +314,8 @@
                 const itemsArr = (order.items || []);
                 const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
                 const createdDate = new Date(order.createdAt).toLocaleString();
-                const status = ['processing', 'done', 'shipped', 'delivered'].includes(order.status) ? order.status : 'processing';
-                const isDone = status !== 'processing';
+                const status = ['processing', 'done', 'shipped', 'delivered', 'cancelled'].includes(order.status) ? order.status : 'processing';
+                const isDone = status !== 'processing' && status !== 'cancelled';
                 const orderRef = 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
                 const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
                     const name = esc(item.product?.name || 'Item');
@@ -319,11 +325,11 @@
                     const img = item.product?.image ? `<img class="item-thumb" src="${esc(item.product.image)}" alt="${name}">` : '';
                     return `<li class="item-chip">${img}<span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
                 }).join('')}</ul>` : '<span class="empty-state">No items</span>';
-                return `<div class="order-card${isDone ? ' order-done' : ''}">
+                return `<div class="order-card${isDone ? ' order-done' : ''}${status === 'cancelled' ? ' order-cancelled' : ''}">
                     <div class="order-card-header">
                         <span class="order-number">Order #${index+1} <small class="order-ref">${esc(orderRef)}</small></span>
                         <div class="order-header-actions">
-                            <span class="order-status-badge ${isDone ? 'done' : 'pending'}">${statusLabels[status]}</span>
+                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${statusLabels[status]}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
                             ${orderActions(order, status)}
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
@@ -432,7 +438,7 @@
         }
     }
 
-    const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered' };
+    const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled' };
 
     function receiptStatusHtml(order) {
         const info = order.receiptEmail;
@@ -480,13 +486,14 @@
         const button = (label, next, extra = '', cls = '') =>
             `<button type="button" class="order-done-btn${cls}" data-order-id="${esc(order.id)}" data-status="${next}" ${extra}>${label}</button>`;
         const actions = {
-            processing: button('Mark as Done', 'done'),
-            done: button('Mark as Shipped', 'shipped', 'data-ask-location="1"') + button('Undo', 'processing', '', ' undo'),
+            processing: button('Mark as Done', 'done') + button('Cancel order', 'cancelled', '', ' cancel'),
+            done: button('Mark as Shipped', 'shipped', 'data-ask-location="1"') + button('Undo', 'processing', '', ' undo') + button('Cancel order', 'cancelled', '', ' cancel'),
             shipped: button('Update location', 'shipped', 'data-ask-location="1" data-require-location="1"', ' undo')
                 + button('Mark as Delivered', 'delivered') + button('Undo', 'done', '', ' undo'),
             delivered: button('Undo', 'shipped', '', ' undo'),
+            cancelled: '',
         };
-        return actions[status];
+        return actions[status] || '';
     }
 
     async function setOrderStatus(orderId, status, button) {
@@ -495,6 +502,8 @@
             showLogin();
             return;
         }
+
+        if (status === 'cancelled' && !confirm('Cancel this order? The customer will see the cancelled status on the tracking page.')) return;
 
         const payload = { status };
         if (button.dataset.askLocation) {
@@ -777,6 +786,11 @@
         productCount.textContent = `${products.length} product(s)`;
         const saleItems = products.filter(p => p.onSale || (typeof p.originalPrice === 'number' && p.originalPrice > p.price));
         saleCount.textContent = `${saleItems.length} sale item(s)`;
+        const trackedProducts = products.filter(product => Number.isInteger(product.stock) && product.stock >= 0);
+        document.getElementById('inventory-count').textContent = trackedProducts.length
+            ? trackedProducts.reduce((sum, product) => sum + product.stock, 0)
+            : '—';
+        document.getElementById('inventory-note').textContent = `${trackedProducts.length} of ${products.length} products have stock counts set.`;
 
         productsList.innerHTML = products.map(product => {
             const isDiscount = product.onSale || (typeof product.originalPrice === 'number' && product.originalPrice > product.price);
@@ -794,6 +808,10 @@
                     <div class="product-edit-row">
                         <label>Original Price</label>
                         <input type="number" min="0" step="0.01" value="${product.originalPrice ?? product.price}" id="product-original-${product.id}">
+                    </div>
+                    <div class="product-edit-row">
+                        <label>Units in Stock</label>
+                        <input type="number" min="0" step="1" value="${Number.isInteger(product.stock) ? product.stock : ''}" placeholder="Not set" id="product-stock-${product.id}">
                     </div>
                     <div class="product-edit-row">
                         <label>On Sale</label>
@@ -842,11 +860,18 @@
     async function saveProduct(productId) {
         const price = Number(document.getElementById(`product-price-${productId}`).value);
         const originalPrice = Number(document.getElementById(`product-original-${productId}`).value);
+        const stockInput = document.getElementById(`product-stock-${productId}`).value;
+        const stock = stockInput === '' ? null : Number(stockInput);
         const onSale = document.getElementById(`product-onsale-${productId}`).checked;
         const token = getToken();
 
         if (!token) {
             showLogin();
+            return;
+        }
+        if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
+            productsStatus.textContent = 'Stock must be a whole number of zero or more.';
+            productsStatus.classList.add('error');
             return;
         }
 
@@ -857,7 +882,7 @@
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ price, originalPrice, onSale })
+                body: JSON.stringify({ price, originalPrice, onSale, stock })
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) {
