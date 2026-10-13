@@ -1338,6 +1338,12 @@
             gap: 3rem;
             align-items: start;
         }
+        .checkout-layout { overflow-anchor: none; }
+        .checkout-success {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: start;
+        }
         .checkout-intro-copy {
             max-width: 460px;
             margin: 1rem auto 0;
@@ -3155,6 +3161,11 @@
         @media (max-width: 600px) {
             header { padding: 0 1.2rem; }
             .section { padding: 5rem 1.2rem; }
+            .modal-info { padding: 1.25rem; }
+            .modal-cat { font-size: .52rem; letter-spacing: .2rem; }
+            .modal-name { font-size: clamp(.9rem, 4vw, 1.08rem); letter-spacing: .07rem; }
+            .modal-price { font-size: .9rem; }
+            .modal-desc { font-size: .72rem; }
             .features-grid { grid-template-columns: 1fr 1fr; }
             .feature { border-right: none; border-bottom: 1px solid var(--border); padding: 1.5rem 1rem; }
             .feature:last-child { border-bottom: none; }
@@ -3167,6 +3178,7 @@
             .form-row { grid-template-columns: 1fr; }
             .contact-inner { padding: 0 1rem; }
             .checkout-layout { grid-template-columns: 1fr; gap: 2rem; }
+            .checkout-success { grid-column: 1; grid-row: 2; }
             .drawer-header { padding: 1.2rem 1rem; }
             .drawer-actions { gap: .15rem; margin-right: .2rem; }
             .category-switch {

@@ -446,6 +446,7 @@ function trackingEvents(order) {
 function publicOrder(order, map = {}) {
   const current = order.status === 'shipped' ? order.currentLocation : null;
   return {
+    id: order.id,
     orderNumber: orderNumber(order),
     firstName: order.firstName,
     recipient: { name: `${order.firstName} ${order.lastName}`.trim(), phone: maskPhone(order.contact), address: order.address },
@@ -526,10 +527,13 @@ ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="backgrou
 function statusEmail(order, status, link) {
   const number = orderNumber(order);
   const estimate = formatEstimate(deliveryEstimate(order));
+  const items = orderItemLines(order.items || [])
+    .map(item => `${item.name}${item.size ? ` / ${item.size}` : ''} x${item.qty}`)
+    .join('\n');
   const messages = {
     done: [`Your PYNX order ${number} is packed and ready to ship`, `Good news! Your order ${number} is packed and ready to ship.`],
     shipped: [`Your PYNX order ${number} is on the way`, `Your order ${number} is on the way to you.${order.currentLocation?.text ? `\nLatest location: ${order.currentLocation.text}` : ''}\nEstimated delivery: ${estimate}`],
-    delivered: [`Your PYNX order ${number} was delivered`, `Your order ${number} has been delivered. Thank you for shopping with PYNX!`],
+    delivered: [`Your PYNX order ${number} was delivered`, `All items in your order ${number} have been delivered.\n\nDelivered items:\n${items}\n\nThank you for shopping with PYNX!`],
   };
   const [subject, body] = messages[status];
   return { subject, text: `Hi ${order.firstName},\n\n${body}\n${link && status !== 'delivered' ? `\nTrack your order: ${link}\n` : ''}\n- PYNX` };
@@ -663,29 +667,28 @@ app.post('/api/orders', async (req, res) => {
     return `${item.product?.name || 'Item'} x${item.qty || 1}${sizeText} - PHP ${price.toFixed(2)} each`;
   }).join('\n') || 'No items.';
 
-  const { emailSent, emailError } = await notifyAdmins(
-    `New order received from ${firstName} ${lastName}`,
-    `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
-  );
-
   const link = trackingUrl(req, order);
   const receipt = receiptEmail(order, siteBaseUrl(req) ? link : '');
-  const customerEmail = await notifyCustomer(
-    String(email).trim(),
-    `Your PYNX order receipt (${orderNumber(order)})`,
-    receipt.text,
-    receipt.html
-  );
-  await recordReceiptResult(order.id, customerEmail);
+  Promise.all([
+    notifyAdmins(
+      `New order received from ${firstName} ${lastName}`,
+      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
+    ),
+    notifyCustomer(
+      String(email).trim(),
+      `Your PYNX order receipt (${orderNumber(order)})`,
+      receipt.text,
+      receipt.html
+    ),
+  ]).then(([, customerEmail]) => recordReceiptResult(order.id, customerEmail))
+    .catch(error => console.error('Order notification processing failed:', error));
 
   return res.status(201).json({
     success: true,
     order: { ...order, orderNumber: orderNumber(order) },
     trackingPath: `/track.html?id=${encodeURIComponent(order.id)}`,
-    emailSent,
-    emailError,
-    customerEmailSent: customerEmail.emailSent,
-    customerEmailError: customerEmail.emailError,
+    customerEmailPending: true,
+    receiptEmailConfigured: Boolean(EMAIL_USER && EMAIL_PASS),
   });
 });
 
@@ -856,6 +859,75 @@ app.post('/api/admin/orders/:id/resend-receipt', verifyAdmin, async (req, res) =
   }
 });
 
+async function cancelOrderById(orderId) {
+  return withLock(async () => {
+    const orders = await loadOrders();
+    const order = orders.find(item => item.id === orderId);
+    if (!order) return { missing: true };
+    if (order.status === 'cancelled') return { order, changed: false };
+    if (!['processing', 'done', undefined].includes(order.status)) {
+      return { invalid: 'This order can no longer be cancelled because it has shipped or been delivered.' };
+    }
+
+    const products = await loadProducts();
+    const inventoryRollback = products.map(product => ({ ...product }));
+    for (const reservation of order.inventoryReservations || []) {
+      const product = products.find(candidate => String(candidate.id) === String(reservation.productId));
+      if (product && Number.isInteger(product.stock)) product.stock += Number(reservation.quantity) || 0;
+    }
+
+    const now = new Date().toISOString();
+    order.status = 'cancelled';
+    order.statusUpdatedAt = now;
+    order.statusTimes = { ...(order.statusTimes || {}), cancelled: now };
+    delete order.locationUpdates;
+    delete order.currentLocation;
+
+    try {
+      await saveProducts(products);
+      await saveOrders(orders);
+    } catch (error) {
+      try {
+        await saveProducts(inventoryRollback);
+      } catch (rollbackError) {
+        console.error('Failed to roll back inventory after order cancellation failed:', rollbackError);
+      }
+      throw error;
+    }
+
+    return { order, changed: true };
+  });
+}
+
+async function sendCancellationNotifications(order) {
+  const number = orderNumber(order);
+  const items = orderItemLines(order.items || [])
+    .map(item => `${item.name}${item.size ? ` / ${item.size}` : ''} x${item.qty}`)
+    .join('\n');
+  const message = `Order ${number} was cancelled.\nCustomer: ${order.firstName} ${order.lastName}\nEmail: ${order.email}`;
+  const customerMessage = `Hi ${order.firstName},\n\nYour order ${number} has been cancelled. The cancelled items were:\n${items}\n\nIf you need help, please contact PYNX.\n\n- PYNX`;
+  await Promise.all([
+    notifyAdmins(`PYNX order ${number} cancelled`, message),
+    notifyCustomer(String(order.email || '').trim(), `Your PYNX order ${number} was cancelled`, customerMessage),
+  ]).catch(error => console.error('Order cancellation email notifications failed:', error));
+}
+
+app.patch('/api/orders/:id/cancel', async (req, res) => {
+  try {
+    const result = await cancelOrderById(String(req.params.id));
+    if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
+    if (result.changed) await sendCancellationNotifications(result.order);
+    return res.json({
+      success: true,
+      order: { id: result.order.id, status: result.order.status, statusUpdatedAt: result.order.statusUpdatedAt, statusTimes: result.order.statusTimes },
+    });
+  } catch (error) {
+    console.error('Customer order cancellation failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to cancel this order right now. Please try again.' });
+  }
+});
+
 app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const status = String(req.body.status || '');
@@ -865,6 +937,19 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   }
   if (location && status !== 'shipped') {
     return res.status(400).json({ success: false, message: 'A current location can only be set while an order is shipped.' });
+  }
+
+  if (status === 'cancelled') {
+    try {
+      const result = await cancelOrderById(orderId);
+      if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+      if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
+      if (result.changed) await sendCancellationNotifications(result.order);
+      return res.json({ success: true, order: result.order });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ success: false, message: 'Failed to cancel order.' });
+    }
   }
 
   try {
@@ -877,14 +962,9 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
       if (!order) return null;
 
       const previous = order.status || 'processing';
-      if (previous === 'cancelled' && status !== 'cancelled') return { invalid: 'Cancelled orders cannot be reopened.' };
-      if (status === 'cancelled' && !['processing', 'done', 'cancelled'].includes(previous)) {
-        return { invalid: 'Only orders that have not shipped can be cancelled.' };
-      }
+      if (previous === 'cancelled') return { invalid: 'Cancelled orders cannot be reopened.' };
       const changed = previous !== status;
       const now = new Date().toISOString();
-      let inventoryRollback = null;
-      let inventoryToSave = null;
       order.status = status;
       if (changed) {
         order.statusUpdatedAt = now;
@@ -895,35 +975,14 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
         times[status] = now;
         order.statusTimes = times;
       }
-      if (changed && status === 'cancelled') {
-        const products = await loadProducts();
-        inventoryRollback = products.map(product => ({ ...product }));
-        for (const reservation of order.inventoryReservations || []) {
-          const product = products.find(candidate => String(candidate.id) === String(reservation.productId));
-          if (product && Number.isInteger(product.stock)) product.stock += Number(reservation.quantity) || 0;
-        }
-        inventoryToSave = products;
-      }
-      if (status === 'cancelled' || ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
+      if (ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
       if (status !== 'shipped') {
         delete order.currentLocation;
       } else if (location) {
         order.currentLocation = { text: location, ...(point || {}), updatedAt: now };
         order.locationUpdates = [...(order.locationUpdates || []), { text: location, at: now }];
       }
-      try {
-        if (inventoryToSave) await saveProducts(inventoryToSave);
-        await saveOrders(orders);
-      } catch (error) {
-        if (inventoryRollback) {
-          try {
-            await saveProducts(inventoryRollback);
-          } catch (rollbackError) {
-            console.error('Failed to roll back inventory after order cancellation failed:', rollbackError);
-          }
-        }
-        throw error;
-      }
+      await saveOrders(orders);
       const flowStatuses = ORDER_STATUSES.filter(name => name !== 'cancelled');
       return { order, changed, advanced: changed && flowStatuses.includes(status) && flowStatuses.includes(previous) && flowStatuses.indexOf(status) > flowStatuses.indexOf(previous) };
     });

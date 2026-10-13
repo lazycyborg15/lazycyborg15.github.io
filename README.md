@@ -40,7 +40,7 @@ The React app will run in development mode and the Express server will run on po
 - The Express server is in `/server`
 - Product prices, discounts, and admin-managed stock counts are stored in `/data/products.json`. Stock starts untracked until an admin enters a count; checkout checks and decrements tracked stock, and cancelling an unshipped order restores it.
 - Orders are stored in `/data/orders.json` and are available to the authenticated admin dashboard.
-- Public product data is served by `GET /api/products`; orders are submitted through `POST /api/orders`.
+- Public product data is served by `GET /api/products`; orders are submitted through `POST /api/orders`. Customers can cancel orders that have not shipped through the order confirmation or tracking page.
 - Health check: `GET /api/health`
 - Start the server on the shop computer with `node server/index.js`.
 - On another device connected to the same network, open the shop using the shop computer's LAN address, for example `http://192.168.1.20:5000`.
@@ -84,13 +84,13 @@ All `/api/admin/*` routes need `Authorization: Bearer <token>` from `POST /api/a
 | --- | --- |
 | `POST /api/admin/login` | Staff login, returns a 2-hour token |
 | `GET /api/admin/orders` | All orders, newest first |
-| `PATCH /api/admin/orders/:id/status` | Update order status or cancel an order before it ships |
+| `PATCH /api/admin/orders/:id/status` | Update order status; customers are emailed when orders are delivered or cancelled |
 | `GET /api/admin/contacts` | Customer concerns |
 | `GET /api/admin/reviews` | Customer reviews |
 | `GET /api/admin/products` | Product catalog |
 | `PUT /api/admin/products/:id` | Update price, original price, sale flag, and stock count |
 
-Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `POST /api/contact`, `POST /api/reviews`, `GET /api/products`, `GET /api/health`.
+Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `PATCH /api/orders/:id/cancel` (customer cancellation is available on the tracking page only and only before shipment), `GET /api/orders/track`, `POST /api/orders/track`, `POST /api/contact`, `POST /api/reviews`, `GET /api/products`, `GET /api/health`.
 
 ## Static site fallback
 

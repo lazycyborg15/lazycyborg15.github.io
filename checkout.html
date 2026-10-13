@@ -118,7 +118,7 @@
                 </div>
                 <button class="btn-primary form-submit" type="submit">Submit Order</button>
             </form>
-            <div class="form-success" id="checkout-success" style="display:none;">
+            <div class="form-success checkout-success" id="checkout-success" style="display:none;">
                 <div class="check">✓</div>
                 <p id="checkout-email-note">Thanks for your order.</p>
                 <p id="checkout-order-ref" style="display:none;"></p>
@@ -578,15 +578,16 @@
 
         document.addEventListener('DOMContentLoaded', initDeliveryMap);
 
+        let checkoutSubmitting = false;
+
         document.getElementById('checkout-form').addEventListener('submit', async function(event) {
             event.preventDefault();
+            if (checkoutSubmitting) return;
 
             if (!localStorage.getItem('pynx_logged_in')) {
                 checkCheckoutAuth();
                 return;
             }
-
-            if (window.PYNX_CATALOG_READY) await window.PYNX_CATALOG_READY;
 
             const firstName = document.getElementById('checkout-first-name').value.trim();
             const lastName = document.getElementById('checkout-last-name').value.trim();
@@ -619,11 +620,10 @@
                 alert('Please enter a valid email address.');
                 return;
             }
-            if (deliveryPin.map && !deliveryPin.point) {
-                clearTimeout(deliveryPin.timer);
-                await locateAddress();
-            }
-
+            checkoutSubmitting = true;
+            const submitButton = this.querySelector('[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Submitting...';
             try {
                 const response = await fetch(getApiUrl('/api/orders'), {
                     method: 'POST',
@@ -646,11 +646,12 @@
                     throw new Error(message);
                 }
 
+                const checkoutLayout = document.querySelector('.checkout-layout');
+                if (checkoutLayout) checkoutLayout.style.minHeight = `${checkoutLayout.scrollHeight}px`;
                 document.getElementById('checkout-form').style.display = 'none';
-                if (!result.customerEmailSent) console.warn('Receipt email was not sent:', result.customerEmailError);
-                document.getElementById('checkout-email-note').textContent = result.customerEmailSent
-                    ? 'Thanks for your order. A receipt with a tracking link has been sent to your email.'
-                    : 'Thanks for your order. We could not send the receipt email, so please save your order number and use the tracking button below.';
+                document.getElementById('checkout-email-note').textContent = result.receiptEmailConfigured
+                    ? 'Thanks for your order. Your order is confirmed. We are processing your receipt email; you can track your order below.'
+                    : 'Thanks for your order. Your order is confirmed. Email receipts are unavailable right now, so please save your order number and use the tracking link below.';
                 if (result.order?.estimatedDeliveryFrom && result.order?.estimatedDeliveryTo) {
                     const day = (iso, withYear) => {
                         const [y, m, d] = iso.split('-').map(Number);
@@ -673,6 +674,9 @@
                 document.getElementById('checkout-success').style.display = 'block';
             } catch (error) {
                 console.error('Checkout submission error:', error);
+                checkoutSubmitting = false;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Order';
                 if (error instanceof TypeError || error.name === 'AbortError' || /Unexpected response/.test(error?.message || '')) {
                     alert('We could not reach the store server, so your order was not placed. Please try again in a moment.');
                     return;

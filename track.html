@@ -82,6 +82,7 @@
         .track-form { display: grid; gap: .8rem; background: #fff; border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem; }
         .track-form input { padding: .8rem 1rem; border: 1px solid rgba(17,17,17,.2); border-radius: 8px; font: inherit; }
         .track-error { color: #b91c1c; margin: 1rem 1.25rem 0; }
+        .track-cancel-order { margin-top: 1rem; min-height: 42px; }
     </style>
 </head>
 <body class="checkout-page">
@@ -182,6 +183,36 @@
     const fmtDay = value => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const fmtClock = value => new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+    const canCancelOrder = order => Boolean(order.id && ['processing', 'done'].includes(order.status));
+
+    async function cancelTrackedOrder(order, button) {
+        if (!canCancelOrder(order) || !confirm('Cancel this order? This cannot be undone.')) return;
+        button.disabled = true;
+        button.textContent = 'Cancelling...';
+        errorEl.textContent = '';
+        try {
+            const response = await fetch(`${TRACK_API_BASE}/api/orders/${encodeURIComponent(order.id)}/cancel`, { method: 'PATCH' });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to cancel your order.');
+            order.status = data.order.status;
+            order.statusUpdatedAt = data.order.statusUpdatedAt;
+            order.statusTimes = data.order.statusTimes;
+            order.events = [
+                { at: data.order.statusUpdatedAt, title: 'Order cancelled', description: 'This order was cancelled by the store.', major: true },
+                ...(order.events || []),
+            ];
+            const previousHeight = resultEl.scrollHeight;
+            renderOrder(order);
+            resultEl.style.minHeight = `${previousHeight}px`;
+            requestAnimationFrame(() => window.scrollTo(0, window.scrollY));
+        } catch (error) {
+            errorEl.textContent = error instanceof TypeError
+                ? 'We could not reach the store server. Please try again shortly.'
+                : error.message || 'Unable to cancel your order. Please try again.';
+            button.disabled = false;
+            button.textContent = 'Cancel this order';
+        }
+    }
 
     // Times are shown in the visitor's own time zone; the date appears on the newest update of each day.
     function renderTimeline(events) {
@@ -230,6 +261,7 @@
                     <span class="fill" style="width:${(level / 3) * 75}%"></span>
                     ${steps}
                 </div>`}
+                ${canCancelOrder(order) ? '<button type="button" class="btn-secondary track-cancel-order" id="track-cancel-order">Cancel this order</button>' : ''}
             </section>
             <section class="track-section track-map-card" id="track-map-card">
                 <div id="track-map"></div>
@@ -264,6 +296,8 @@
         document.getElementById('copy-order').addEventListener('click', event => {
             navigator.clipboard?.writeText(order.orderNumber).then(() => { event.target.textContent = 'Copied'; }).catch(() => {});
         });
+        const cancelButton = document.getElementById('track-cancel-order');
+        if (cancelButton) cancelButton.addEventListener('click', () => cancelTrackedOrder(order, cancelButton));
         try {
             renderMap(order);
         } catch (err) {
