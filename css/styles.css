@@ -1428,12 +1428,6 @@
             font-size: 1rem;
             letter-spacing: 0;
         }
-        .product-delivery-estimate { margin: 1rem 0; color: var(--mid); font-size: .82rem; }
-        .product-delivery-estimate > strong { color: var(--ink); text-transform: uppercase; letter-spacing: .1rem; }
-        .product-estimate-fields { display: flex; gap: .4rem; margin: .6rem 0; }
-        .product-estimate-fields input { min-width: 0; width: 38%; padding: .55rem; border: 1px solid var(--border); }
-        .product-estimate-fields button { padding: .55rem .8rem; color: var(--bg); background: var(--ink); }
-        #product-estimate-result { min-height: 1.2em; margin: .4rem 0; color: var(--ink); }
         .modal-img .gallery-arrow { position: absolute; z-index: 1; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; background: rgba(17,17,17,.68); color: #fff; font-size: 1.7rem; line-height: 1; }
         .modal-img .gallery-prev { left: .8rem; }
         .modal-img .gallery-next { right: .8rem; }
@@ -1447,6 +1441,16 @@
         .checkout-payment label { display: flex; gap: .6rem; align-items: center; padding: .5rem 0; }
         .checkout-payment input { accent-color: var(--ink); }
         .checkout-payment p { color: var(--mid); font-size: .78rem; margin: .5rem 0 0; }
+        .checkout-payment .checkout-payment-info {
+            margin-top: .8rem;
+            padding: .8rem 1rem;
+            border-left: 2px solid #8b7143;
+            background: rgba(205, 173, 111, .1);
+            color: var(--ink);
+            font-size: .82rem;
+            line-height: 1.55;
+        }
+        .checkout-payment .checkout-payment-info[hidden] { display: none; }
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1755,6 +1759,76 @@
             min-height: 44px;
         }
         body.policy-modal-open { overflow: hidden; }
+
+        .admin-action-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1300;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .admin-action-modal[hidden] { display: none; }
+        .admin-action-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 10, 10, .68);
+            backdrop-filter: blur(5px);
+        }
+        .admin-action-card {
+            position: relative;
+            width: min(100%, 480px);
+            padding: clamp(1.4rem, 5vw, 2rem);
+            border: 1px solid rgba(205, 173, 111, .5);
+            background: #f7f7f3;
+            box-shadow: 0 28px 100px rgba(0, 0, 0, .3);
+        }
+        .admin-action-card .section-eyebrow {
+            margin: 0 0 .5rem;
+            color: #8b7143;
+            font-size: .68rem;
+            letter-spacing: .24rem;
+        }
+        .admin-action-card h2 {
+            margin: 0 0 .6rem;
+            color: var(--ink);
+            font-family: 'Bebas Neue', Arial, sans-serif;
+            font-size: clamp(2rem, 7vw, 2.6rem);
+            font-weight: 400;
+            letter-spacing: .08rem;
+        }
+        .admin-action-card > p:not(.section-eyebrow) {
+            margin: 0;
+            color: #42423f;
+            font-size: .9rem;
+            line-height: 1.6;
+        }
+        .admin-action-input-label {
+            display: block;
+            margin: 1.1rem 0 .4rem;
+            color: var(--ink);
+            font-size: .78rem;
+            font-weight: 700;
+        }
+        .admin-action-input {
+            width: 100%;
+            padding: .8rem 1rem;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--ink);
+            font: inherit;
+        }
+        .admin-action-buttons {
+            display: flex;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: .7rem;
+            margin-top: 1.4rem;
+        }
+        .admin-action-buttons button { min-height: 44px; }
+        .admin-action-buttons .admin-action-danger { background: #8b302c; }
+        body.admin-action-open { overflow: hidden; }
 
         /* ── AUTH PAGES ── */
         .page-auth {

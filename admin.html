@@ -213,10 +213,95 @@
     </section>
 </main>
 <script src="js/config.js"></script>
+<div class="admin-action-modal" id="admin-action-modal" hidden>
+    <div class="admin-action-backdrop" data-dialog-cancel></div>
+    <section class="admin-action-card" role="dialog" aria-modal="true" aria-labelledby="admin-action-title" aria-describedby="admin-action-message">
+        <p class="section-eyebrow">PYNX Admin</p>
+        <h2 id="admin-action-title"></h2>
+        <p id="admin-action-message"></p>
+        <label class="admin-action-input-label" id="admin-action-input-label" for="admin-action-input" hidden></label>
+        <input id="admin-action-input" class="admin-action-input" type="text" hidden>
+        <div class="admin-action-buttons">
+            <button type="button" class="btn-secondary" data-dialog-cancel>Cancel</button>
+            <button type="button" class="btn-primary" id="admin-action-confirm">Confirm</button>
+        </div>
+    </section>
+</div>
 <script>
     const loginView = document.getElementById('login-view');
     const adminDashboard = document.getElementById('admin-dashboard');
     const adminNote = document.getElementById('admin-note');
+    const adminActionModal = document.getElementById('admin-action-modal');
+    const adminActionTitle = document.getElementById('admin-action-title');
+    const adminActionMessage = document.getElementById('admin-action-message');
+    const adminActionInput = document.getElementById('admin-action-input');
+    const adminActionInputLabel = document.getElementById('admin-action-input-label');
+
+    function showAdminDialog({ title, message, confirmLabel = 'Confirm', destructive = false, inputLabel, placeholder = '', required = false }) {
+        return new Promise(resolve => {
+            const previouslyFocused = document.activeElement;
+            const cancelButtons = adminActionModal.querySelectorAll('[data-dialog-cancel]');
+            const confirmButton = document.getElementById('admin-action-confirm');
+            const hasInput = typeof inputLabel === 'string';
+            let settled = false;
+
+            adminActionTitle.textContent = title;
+            adminActionMessage.textContent = message;
+            confirmButton.textContent = confirmLabel;
+            confirmButton.classList.toggle('admin-action-danger', destructive);
+            adminActionInputLabel.textContent = hasInput ? inputLabel : '';
+            adminActionInputLabel.hidden = !hasInput;
+            adminActionInput.hidden = !hasInput;
+            adminActionInput.required = required;
+            adminActionInput.placeholder = placeholder;
+            adminActionInput.value = '';
+            adminActionModal.hidden = false;
+            document.body.classList.add('admin-action-open');
+
+            const finish = value => {
+                if (settled) return;
+                settled = true;
+                adminActionModal.hidden = true;
+                document.body.classList.remove('admin-action-open');
+                document.removeEventListener('keydown', onKeyDown);
+                confirmButton.removeEventListener('click', onConfirm);
+                cancelButtons.forEach(button => button.removeEventListener('click', onCancel));
+                if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+                resolve(value);
+            };
+            const onConfirm = () => {
+                const value = adminActionInput.value.trim();
+                if (hasInput && required && !value) {
+                    adminActionInput.focus();
+                    return;
+                }
+                finish(hasInput ? value : true);
+            };
+            const onCancel = () => finish(hasInput ? null : false);
+            const onKeyDown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    onCancel();
+                } else if (event.key === 'Tab') {
+                    const focusable = [...adminActionModal.querySelectorAll('button:not([disabled]), input:not([hidden])')];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }
+            };
+
+            confirmButton.addEventListener('click', onConfirm);
+            cancelButtons.forEach(button => button.addEventListener('click', onCancel));
+            document.addEventListener('keydown', onKeyDown);
+            (hasInput ? adminActionInput : confirmButton).focus();
+        });
+    }
     const adminStatus = document.getElementById('admin-status');
     const orderCount = document.getElementById('order-count');
     const lastRefresh = document.getElementById('last-refresh');
@@ -292,7 +377,7 @@
         try {
             const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking/${stepIndex}/resend-email`), {
                 method: 'POST',
-                headers: { 'Authorization': `****** }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) throw new Error(data.message || 'Unable to resend tracking notification.');
@@ -517,7 +602,13 @@
     }
 
     async function removeOrder(orderId, button) {
-        if (!confirm('Remove this order? It will be deleted from the admin list.')) return;
+        const confirmed = await showAdminDialog({
+            title: 'Remove this order?',
+            message: 'This order will be deleted from the admin list. This action cannot be undone.',
+            confirmLabel: 'Remove order',
+            destructive: true
+        });
+        if (!confirmed) return;
 
         const token = getToken();
         if (!token || token === 'local-admin-session') {
@@ -633,14 +724,29 @@
             return;
         }
 
-        if (status === 'cancelled' && !confirm('Cancel this order? The customer will see the cancelled status on the tracking page.')) return;
+        if (status === 'cancelled') {
+            const confirmed = await showAdminDialog({
+                title: 'Cancel this order?',
+                message: 'The customer will see the cancelled status on the tracking page.',
+                confirmLabel: 'Cancel order',
+                destructive: true
+            });
+            if (!confirmed) return;
+        }
 
         if (status !== 'cancelled') return;
         const payload = { status };
         if (button.dataset.askLocation) {
-            const answer = prompt('Where is the package now? (for example: Butuan City, Agusan del Norte)\nThe customer will see it on the tracking map. Leave blank to skip.');
+            const answer = await showAdminDialog({
+                title: 'Add package location',
+                message: 'The customer will see this location on the tracking map.',
+                confirmLabel: 'Save location',
+                inputLabel: 'Current package location',
+                placeholder: 'e.g. Butuan City, Agusan del Norte',
+                required: Boolean(button.dataset.requireLocation)
+            });
             if (answer === null) return;
-            payload.location = answer.trim();
+            payload.location = answer;
             if (button.dataset.requireLocation && !payload.location) return;
         }
 
@@ -669,10 +775,18 @@
     }
 
     async function postTrackingStep(orderId, stepIndex, button) {
-        const location = prompt(`Enter the location for “${ADMIN_TRACKING_STEPS[stepIndex]}”.`);
+        const location = await showAdminDialog({
+            title: 'Update shipment location',
+            message: `Enter the location for “${ADMIN_TRACKING_STEPS[stepIndex]}”. The customer will see it on the tracking page.`,
+            confirmLabel: 'Post update',
+            inputLabel: 'Package location',
+            placeholder: 'City, province',
+            required: true
+        });
         if (location === null) return;
         if (!location.trim()) {
-            alert('A location is required for every tracking update.');
+            adminStatus.textContent = 'A location is required for every tracking update.';
+            adminStatus.classList.add('error');
             return;
         }
         const token = getToken();
@@ -681,7 +795,7 @@
             const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking`), {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stepIndex, location: location.trim() })
+                body: JSON.stringify({ stepIndex, location })
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) throw new Error(data.message || 'Unable to save tracking update.');

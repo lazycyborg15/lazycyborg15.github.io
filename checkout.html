@@ -60,17 +60,16 @@
                     <p class="checkout-empty">Your bag is empty.</p>
                 </div>
                 <div class="checkout-summary-total">
-                    <span>Items subtotal</span>
+                    <span>Item subtotal</span>
                     <strong id="checkout-subtotal">₱0.00</strong>
                 </div>
                 <div class="checkout-summary-total">
-                    <span>J&amp;T shipping</span>
+                    <span>Additional fee · Shipping</span>
                     <strong id="checkout-shipping-fee">Enter your delivery address</strong>
                 </div>
-                <p class="checkout-map-hint" id="checkout-shipping-note" role="status">Shipping and delivery estimate are calculated from your province, city, and packed item weights.</p>
-                <p class="checkout-map-hint" id="checkout-delivery-estimate" style="display:none;"></p>
+                <p class="checkout-map-hint" id="checkout-shipping-note" role="status">Shipping is calculated from your province, city, and packed item weight, then added to your total.</p>
                 <div class="checkout-summary-total">
-                    <span>Total</span>
+                    <span>Total to pay</span>
                     <strong id="checkout-total">₱0.00</strong>
                 </div>
             </aside>
@@ -131,7 +130,8 @@
                     <label><input type="radio" name="payment-method" value="gcash" required> GCash</label>
                     <label><input type="radio" name="payment-method" value="card" required> Card</label>
                     <label><input type="radio" name="payment-method" value="cash_on_hand" required> Cash on delivery</label>
-                    <p id="checkout-payment-note">GCash and card payments are completed securely on PayMongo. Cash is paid when your order is delivered.</p>
+                    <p id="checkout-payment-note">Choose a method to see how payment works. GCash and card details are entered securely on PayMongo, not on this website.</p>
+                    <div class="checkout-payment-info" id="checkout-payment-info" role="status" aria-live="polite" hidden></div>
                 </fieldset>
                 <button class="btn-primary form-submit" id="checkout-submit" type="submit">Continue to payment</button>
             </form>
@@ -139,7 +139,6 @@
                 <div class="check">✓</div>
                 <p id="checkout-email-note">Thanks for your order.</p>
                 <p id="checkout-order-ref" style="display:none;"></p>
-                <p id="checkout-eta" style="display:none;"></p>
                 <p><a id="checkout-track-link" class="btn-primary" href="track.html" style="display:none;">Track your order</a></p>
                 <p>If you need help, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a>.</p>
             </div>
@@ -470,28 +469,17 @@
         let activeShippingQuote = null;
         let shippingQuoteTimer = null;
 
-        function formatEstimateRange(estimate) {
-            if (!estimate?.from || !estimate?.to) return '';
-            const format = (value, year) => {
-                const [y, m, d] = value.split('-').map(Number);
-                return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
-            };
-            return estimate.from === estimate.to ? format(estimate.to, true) : `${format(estimate.from)}–${format(estimate.to, true)}`;
-        }
-
         async function refreshShippingQuote() {
             const parts = addressParts();
             const cartItems = getCheckoutItems();
             const fee = document.getElementById('checkout-shipping-fee');
             const note = document.getElementById('checkout-shipping-note');
-            const eta = document.getElementById('checkout-delivery-estimate');
             const apiItems = cartItems.map(item => ({ product: { id: item.product?.id }, qty: Number(item.qty) }));
             activeShippingQuote = null;
-            eta.style.display = 'none';
 
             if (!parts.province || !parts.city || !apiItems.length) {
                 fee.textContent = 'Enter your delivery address';
-                note.textContent = 'Shipping and delivery estimate are calculated from your province, city, and packed item weights.';
+                note.textContent = 'Enter your province and city to calculate shipping. The fee is added to your total.';
                 const subtotal = Number(document.getElementById('checkout-subtotal').textContent.replace(/[^\d.]/g, '')) || 0;
                 document.getElementById('checkout-total').textContent = `₱${subtotal.toFixed(2)}`;
                 return null;
@@ -506,12 +494,10 @@
                     body: JSON.stringify({ addressParts: parts, items: apiItems }),
                 });
                 const data = await response.json();
-                if (!response.ok || !data.success) throw new Error(data.message || 'Unable to calculate delivery.');
+                if (!response.ok || !data.success) throw new Error(data.message || 'Unable to calculate shipping.');
                 activeShippingQuote = data;
                 fee.textContent = `₱${Number(data.shippingFee).toFixed(2)}`;
-                note.textContent = `${data.zone} · ${data.totalWeightGrams} g packed weight`;
-                eta.textContent = `Estimated delivery: ${formatEstimateRange(data.estimatedDelivery)}`;
-                eta.style.display = '';
+                note.textContent = `${data.zone} shipping · ${data.totalWeightGrams} g packed weight (included in total)`;
                 document.getElementById('checkout-total').textContent = `₱${Number(data.total).toFixed(2)}`;
                 return data;
             } catch (error) {
@@ -530,6 +516,18 @@
         }));
 
         document.addEventListener('DOMContentLoaded', async () => {
+            const paymentInfo = document.getElementById('checkout-payment-info');
+            const updatePaymentInfo = () => {
+                const selected = document.querySelector('input[name="payment-method"]:checked')?.value;
+                const messages = {
+                    gcash: 'After you continue, PayMongo will open its secure checkout. Enter your GCash mobile number there and follow the authorization steps. Do not enter your GCash MPIN on this website.',
+                    card: 'After you continue, PayMongo will open its secure checkout. Enter your card number, expiry date, and security code there. PYNX does not collect or store your card details.',
+                    cash_on_hand: 'Pay the courier in cash when your order is delivered.',
+                };
+                paymentInfo.textContent = messages[selected] || '';
+                paymentInfo.hidden = !selected;
+            };
+            document.querySelectorAll('input[name="payment-method"]').forEach(input => input.addEventListener('change', updatePaymentInfo));
             try {
                 const response = await fetch(getApiUrl('/api/checkout/config'), { cache: 'no-store' });
                 const config = await response.json();
@@ -537,9 +535,11 @@
                 if (!config.onlinePaymentsEnabled) {
                     document.querySelectorAll('input[name="payment-method"][value="gcash"], input[name="payment-method"][value="card"]').forEach(input => {
                         input.disabled = true;
+                        input.checked = false;
                         input.closest('label').classList.add('payment-unavailable');
                     });
                     document.getElementById('checkout-payment-note').textContent = 'GCash and card will be available when PayMongo is configured. Cash on delivery is available now.';
+                    updatePaymentInfo();
                 }
                 if (!config.shippingConfigured) {
                     document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';
@@ -774,15 +774,6 @@
                 document.getElementById('checkout-email-note').textContent = result.receiptEmailConfigured
                     ? 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives; you can track your order below.'
                     : 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives. Email receipts are unavailable, so save your order number and tracking link.';
-                if (result.order?.estimatedDelivery?.from && result.order?.estimatedDelivery?.to) {
-                    const day = (iso, withYear) => {
-                        const [y, m, d] = iso.split('-').map(Number);
-                        return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined });
-                    };
-                    const eta = document.getElementById('checkout-eta');
-                    eta.textContent = `Estimated delivery: ${day(result.order.estimatedDelivery.from)} – ${day(result.order.estimatedDelivery.to, true)}`;
-                    eta.style.display = '';
-                }
                 if (result.order?.orderNumber) {
                     const ref = document.getElementById('checkout-order-ref');
                     ref.textContent = `Order number: ${result.order.orderNumber}`;
