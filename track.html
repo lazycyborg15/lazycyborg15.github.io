@@ -7,10 +7,10 @@
     <title>Track Your Order | PYNX</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="/css/styles.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="js/config.js"></script>
+    <script src="/js/config.js"></script>
     <style>
         .track-wrap { max-width: 560px; margin: 0 auto; padding: 110px 0 4rem; }
         .track-lookup { padding: 0 1.25rem; }
@@ -88,14 +88,14 @@
 </head>
 <body class="checkout-page">
 <header id="site-header">
-    <a class="logo" href="index.html#home">
-        <img class="header-logo" src="logo/pynx-logo-black.png" alt="PYNX">
+    <a class="logo" href="/index.html#home">
+        <img class="header-logo" src="/logo/pynx-logo-black.png" alt="PYNX">
     </a>
     <div class="header-right">
         <nav>
             <ul id="nav-menu">
-                <li><a href="index.html#home" class="nav-link">Home</a></li>
-                <li><a href="contact.html" class="nav-link">Contact Us</a></li>
+                <li><a href="/index.html#home" class="nav-link">Home</a></li>
+                <li><a href="/contact.html" class="nav-link">Contact Us</a></li>
             </ul>
         </nav>
     </div>
@@ -135,15 +135,6 @@
         'Out for delivery',
         'Delivered',
     ];
-
-    function fmtEstimate(estimate, withYear = false) {
-        if (!estimate) return '';
-        const day = (iso, showYear) => {
-            const [y, m, d] = iso.split('-').map(Number);
-            return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: showYear ? 'numeric' : undefined });
-        };
-        return estimate.from === estimate.to ? day(estimate.to, withYear) : `${day(estimate.from)} – ${day(estimate.to, withYear)}`;
-    }
 
     let map = null;
     const pin = (emoji, size) => L.divIcon({ className: '', html: `<div class="map-icon">${emoji}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
@@ -257,11 +248,13 @@
             const cls = index < level ? 'complete' : (index === level ? 'current complete' : '');
             return `<div class="progress-step ${cls}"><span class="dot">${index === level ? BOX_ICON : ''}</span><span>${label}</span></div>`;
         }).join('');
-        const arriving = cancelled
+        const statusMessage = cancelled
             ? `Cancelled on <strong>${esc(fmtDay(order.statusTimes?.cancelled))}</strong>`
             : delivered
                 ? `Delivered on <strong>${esc(fmtDay(order.statusTimes?.delivered))}</strong>`
-                : `Arriving <strong>${esc(fmtEstimate(order.estimatedDelivery))}</strong>`;
+                : order.status === 'shipped'
+                    ? 'Your package is on the way. Follow the tracking updates below.'
+                    : 'Tracking updates will appear here as your order moves.';
         const currentTitle = level >= 0 ? TRACKING_LABELS[level] : 'Order received';
         const waybill = order.trackingNumber
             ? `<div class="track-row"><span>J&amp;T tracking number</span><strong class="track-waybill">${esc(order.trackingNumber)} <a href="${esc(order.jntTrackingUrl || 'https://www.jtexpress.ph/')}" target="_blank" rel="noopener noreferrer">Track on J&amp;T</a></strong></div>`
@@ -270,7 +263,7 @@
         resultEl.innerHTML = `
             <section class="track-section track-hero">
             <h1>${esc(cancelled ? STATUS_TITLES.cancelled : currentTitle)}</h1>
-            <p>${arriving}</p>
+            <p>${statusMessage}</p>
             ${cancelled ? '' : `<div class="track-progress">
                 <span class="fill" style="width:${(Math.max(0, level) / 7) * 87.5}%"></span>
                 ${steps}
@@ -294,8 +287,9 @@
             <section class="track-section">
                 <div class="track-row"><span>Order number</span><strong>${esc(order.orderNumber)} <button type="button" class="copy-btn" id="copy-order">Copy</button></strong></div>
                 <div class="track-row"><span>Placed on</span><span>${esc(fmtDay(order.createdAt))}, ${esc(fmtClock(order.createdAt))}</span></div>
-                <div class="track-row"><span>Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>
-                <div class="track-row"><span>Total</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
+                <div class="track-row"><span>Item subtotal</span><strong>₱${Number(order.subtotal || 0).toFixed(2)}</strong></div>
+                <div class="track-row"><span>Additional fee · Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>
+                <div class="track-row"><span>Total to pay</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
                 <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
                 ${waybill}
             </section>
@@ -305,7 +299,7 @@
                 <p class="timeline-note">Times shown in your local time zone</p>
             </section>
             <section class="track-section">
-                <a class="track-contact" href="contact.html"><span>Contact us about this order</span><span aria-hidden="true">›</span></a>
+                <a class="track-contact" href="/contact.html"><span>Contact us about this order</span><span aria-hidden="true">›</span></a>
             </section>`;
         document.getElementById('track-lookup-head').style.display = 'none';
         formEl.style.display = 'none';
