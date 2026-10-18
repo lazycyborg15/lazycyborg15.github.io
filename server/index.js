@@ -14,13 +14,57 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
-let SHIPPING_ZONES = [];
+const DEFAULT_SHIPPING_ZONES = [
+  {
+    name: 'Cebu City',
+    provinces: ['Cebu'],
+    cities: ['Cebu City', 'Cebu'],
+    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 60 }],
+  },
+  {
+    name: 'Lapu-Lapu City / Talisay City',
+    provinces: ['Cebu'],
+    cities: ['Lapu-Lapu City', 'Lapu Lapu City', 'Talisay City'],
+    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 80 }],
+  },
+  {
+    name: 'Cebu Province',
+    provinces: ['Cebu'],
+    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 100 }],
+  },
+  {
+    name: 'Other Visayas',
+    regions: ['Visayas'],
+    rates: [
+      { maxWeightGrams: 999, fee: 100 },
+      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 160 },
+    ],
+  },
+  {
+    name: 'Luzon',
+    regions: ['Luzon'],
+    rates: [
+      { maxWeightGrams: 999, fee: 120 },
+      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 180 },
+    ],
+  },
+  {
+    name: 'Mindanao',
+    regions: ['Mindanao'],
+    rates: [
+      { maxWeightGrams: 999, fee: 120 },
+      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 180 },
+    ],
+  },
+];
+let SHIPPING_ZONES = DEFAULT_SHIPPING_ZONES;
 if (process.env.SHIPPING_RATES_JSON) {
   try {
     SHIPPING_ZONES = JSON.parse(process.env.SHIPPING_RATES_JSON);
     if (!Array.isArray(SHIPPING_ZONES)) throw new Error('Expected a JSON array of shipping zones.');
   } catch (error) {
     console.error('SHIPPING_RATES_JSON is invalid:', error.message);
+    SHIPPING_ZONES = [];
   }
 }
 const TRACKING_STEPS = [
@@ -388,30 +432,9 @@ app.post('/api/customers/login', async (req, res) => {
 // processing = being packed, done = packed and ready to ship, shipped = on the way.
 const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'cancelled'];
 
-// Delivery window shown to customers, counted in days from the order date.
-const DELIVERY_MIN_DAYS = Number(process.env.DELIVERY_MIN_DAYS) || 3;
-const DELIVERY_MAX_DAYS = Math.max(DELIVERY_MIN_DAYS, Number(process.env.DELIVERY_MAX_DAYS) || 7);
 // Optional shipping origin (for example "Cagayan de Oro City, Misamis Oriental") drawn on the tracking map.
 const SHIP_FROM = process.env.SHIP_FROM || '';
 const GEOCODE_COUNTRY = process.env.GEOCODE_COUNTRY !== undefined ? process.env.GEOCODE_COUNTRY : 'ph';
-// Dates are calculated in Philippine time so late-evening orders don't roll back a day.
-const STORE_UTC_OFFSET_MS = 8 * 3600 * 1000;
-
-function addDays(iso, days) {
-  const date = new Date(Date.parse(iso) + STORE_UTC_OFFSET_MS);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-const deliveryEstimate = order => ({
-  from: order.estimatedDeliveryFrom || addDays(order.createdAt, DELIVERY_MIN_DAYS),
-  to: order.estimatedDeliveryTo || addDays(order.createdAt, DELIVERY_MAX_DAYS),
-});
-
-function formatEstimate({ from, to }) {
-  const day = (value, withYear) => new Date(value + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
-  return from === to ? day(to, true) : `${day(from)} - ${day(to, true)}`;
-}
 
 const formatDateTime = iso => new Date(iso).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
 
@@ -584,8 +607,8 @@ function publicOrder(order, map = {}) {
       : null,
     paymentMethod: order.paymentMethod || null,
     paymentStatus: order.paymentStatus || 'pending',
+    subtotal: Number(order.subtotal ?? (Number(order.total) - Number(order.shippingFee || 0))) || 0,
     shippingFee: Number(order.shippingFee) || 0,
-    estimatedDelivery: order.estimatedDelivery || deliveryEstimate(order),
     currentLocation: current ? { text: current.text, updatedAt: current.updatedAt } : null,
     map: {
       destination: map.destination || null,
@@ -613,7 +636,6 @@ async function trackingPayload(order) {
 function receiptEmail(order, link) {
   const lines = orderItemLines(order.items || []);
   const number = orderNumber(order);
-  const estimate = formatEstimate(deliveryEstimate(order));
   const mapsLink = googleMapsUrl(order.address);
   const placed = formatDateTime(order.createdAt);
   const text = [
@@ -623,16 +645,15 @@ function receiptEmail(order, link) {
     '',
     `Order number: ${number}`,
     `Order placed: ${placed}`,
-    `Estimated delivery: ${estimate}`,
     `Payment method: ${order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card'}`,
     `Payment status: ${order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}`,
     '',
     'Items:',
     ...(lines.map(l => `${l.name}${l.size ? ` / ${l.size}` : ''} x${l.qty} - PHP ${l.lineTotal.toFixed(2)}`)),
     '',
-    `Subtotal: PHP ${Number(order.subtotal || order.total - (order.shippingFee || 0)).toFixed(2)}`,
-    `Shipping: PHP ${Number(order.shippingFee || 0).toFixed(2)}`,
-    `Total: PHP ${order.total.toFixed(2)}`,
+    `Item subtotal: PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}`,
+    `Additional fee (shipping): PHP ${Number(order.shippingFee || 0).toFixed(2)}`,
+    `Total to pay: PHP ${order.total.toFixed(2)}`,
     `Shipping address: ${order.address}`,
     `View on Google Maps: ${mapsLink}`,
     `Contact: ${order.contact}`,
@@ -649,9 +670,8 @@ function receiptEmail(order, link) {
 <p>Hi ${escapeHtml(order.firstName)},</p>
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
 <p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
-<p style="background:#f4f4f0;padding:12px 16px;border-radius:6px"><strong>Estimated delivery:</strong> ${escapeHtml(estimate)}</p>
 <p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
-<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal || order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0">Shipping</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
+<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
 <p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
 <p>- PYNX</p></div>`;
@@ -688,25 +708,27 @@ function cleanProductImages(value) {
   return [...new Set(images)];
 }
 
-function shippingQuote(addressParts, items, products, referenceDate = new Date().toISOString()) {
+function shippingQuote(addressParts, items, products) {
   if (!SHIPPING_ZONES.length) {
     return { error: 'Shipping rates are not configured yet. Please contact the store before ordering.' };
   }
   const province = normalizeLocation(addressParts.province);
   const city = normalizeLocation(addressParts.city);
-  const zone = SHIPPING_ZONES.find(candidate => {
+  const region = normalizeLocation(addressParts.region);
+  const names = value => Array.isArray(value) ? value.map(normalizeLocation) : [];
+  const cityZone = SHIPPING_ZONES.find(candidate => {
     const provinces = Array.isArray(candidate.provinces) ? candidate.provinces.map(normalizeLocation) : [];
-    const cities = Array.isArray(candidate.cities) ? candidate.cities.map(normalizeLocation) : [];
-    return provinces.includes(province) || cities.includes(city);
+    const cities = names(candidate.cities);
+    return cities.includes(city) && (!provinces.length || provinces.includes(province));
   });
+  const provinceZone = SHIPPING_ZONES.find(candidate =>
+    !names(candidate.cities).length && names(candidate.provinces).includes(province)
+  );
+  const regionZone = SHIPPING_ZONES.find(candidate => names(candidate.regions).includes(region));
+  const zone = cityZone || provinceZone || regionZone;
   if (!zone || !Array.isArray(zone.rates) || !zone.rates.length) {
     return { error: `We do not have a shipping rate for ${addressParts.city}, ${addressParts.province} yet.` };
   }
-  if (!Number.isInteger(zone.deliveryMinDays) || !Number.isInteger(zone.deliveryMaxDays) || zone.deliveryMinDays < 0 || zone.deliveryMaxDays < zone.deliveryMinDays) {
-    console.error(`Shipping zone "${zone.name || 'unnamed'}" has invalid delivery-day ranges.`);
-    return { error: 'The delivery estimate for this location is not configured correctly. Please contact the store.' };
-  }
-
   let totalWeightGrams = 0;
   let subtotal = 0;
   const normalizedItems = [];
@@ -742,10 +764,6 @@ function shippingQuote(addressParts, items, products, referenceDate = new Date()
     totalWeightGrams,
     subtotal,
     total: subtotal + Number(rate.fee),
-    estimatedDelivery: {
-      from: addDays(referenceDate, zone.deliveryMinDays),
-      to: addDays(referenceDate, zone.deliveryMaxDays),
-    },
     items: normalizedItems,
   };
 }
@@ -874,7 +892,6 @@ app.post('/api/shipping/quote', async (req, res) => {
       totalWeightGrams: quote.totalWeightGrams,
       subtotal: quote.subtotal,
       total: quote.total,
-      estimatedDelivery: quote.estimatedDelivery,
     });
   } catch (error) {
     console.error('Shipping quote failed:', error);
@@ -1009,7 +1026,7 @@ app.post('/api/orders', async (req, res) => {
   try {
     const result = await withLock(async () => {
       const products = await loadProducts();
-      const quote = shippingQuote(addressParts, items, products, order.createdAt);
+      const quote = shippingQuote(addressParts, items, products);
       if (quote.error) return { error: quote.error };
       const quantities = new Map();
       for (const item of items) {
@@ -1032,9 +1049,6 @@ app.post('/api/orders', async (req, res) => {
       order.total = quote.total;
       order.shippingZone = quote.zone;
       order.totalWeightGrams = quote.totalWeightGrams;
-      order.estimatedDelivery = quote.estimatedDelivery;
-      order.estimatedDeliveryFrom = quote.estimatedDelivery.from;
-      order.estimatedDeliveryTo = quote.estimatedDelivery.to;
       const originalProducts = products.map(product => ({ ...product }));
       quantities.forEach((quantity, productId) => {
         const product = products.find(candidate => String(candidate.id) === productId);
@@ -1104,7 +1118,7 @@ app.post('/api/orders', async (req, res) => {
   Promise.all([
     notifyAdmins(
       `New cash-on-delivery order from ${firstName} ${lastName}`,
-      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nShipping: PHP ${order.shippingFee.toFixed(2)}\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
+      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nItem subtotal: PHP ${order.subtotal.toFixed(2)}\nAdditional fee (shipping): PHP ${order.shippingFee.toFixed(2)}\nTotal to pay: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
     ),
     sendOrderReceipt(order, req),
   ]).then(() => {})
@@ -1488,7 +1502,6 @@ app.put('/api/admin/orders/:id/waybill', verifyAdmin, async (req, res) => {
     const jntUrl = trackTemplate.includes('{trackingNumber}')
       ? trackTemplate.replaceAll('{trackingNumber}', encodeURIComponent(trackingNumber))
       : trackTemplate;
-    const estimate = formatEstimate(deliveryEstimate(order));
     const subject = `Your PYNX order ${orderNumber(order)} has shipped`;
     const text = [
       `Hi ${order.firstName},`,
@@ -1497,12 +1510,11 @@ app.put('/api/admin/orders/:id/waybill', verifyAdmin, async (req, res) => {
       `Order number: ${orderNumber(order)}`,
       `J&T tracking number: ${trackingNumber}`,
       `Track on our site: ${trackLink}`,
-      `Estimated delivery: ${estimate}`,
       `Track on J&T: ${jntUrl}`,
       '',
       '- PYNX',
     ].join('\n');
-    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)}, your order has shipped with J&amp;T Express.</p><p><strong>Order number:</strong> ${escapeHtml(orderNumber(order))}<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}<br><strong>Estimated delivery:</strong> ${escapeHtml(estimate)}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p><p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p></div>`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)}, your order has shipped with J&amp;T Express.</p><p><strong>Order number:</strong> ${escapeHtml(orderNumber(order))}<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p><p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p></div>`;
     const emailResult = await notifyCustomer(String(order.email).trim(), subject, text, html);
     await withLock(async () => {
       const orders = await loadOrders();
