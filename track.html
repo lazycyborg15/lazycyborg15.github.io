@@ -124,6 +124,34 @@
     const errorEl = document.getElementById('track-error');
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const productImageUrl = value => {
+        const source = String(value || '').trim().replace(/\\/g, '/');
+        if (!source) return '';
+        const assetPath = source.match(/(?:^|\/)(assets\/.+)$/i);
+        if (/^[a-z]:\//i.test(source)) return assetPath ? `/${assetPath[1]}` : '';
+        if (/^(?:[a-z][a-z\d+.-]*:|\/\/|\/)/i.test(source)) return source;
+        return `/${source.replace(/^(?:\.\/)+/, '')}`;
+    };
+    const productImageUrls = item => [...new Set([item.image, ...(Array.isArray(item.images) ? item.images : []), item.fitImage]
+        .map(productImageUrl)
+        .filter(Boolean))];
+    const handleTrackingImageError = event => {
+        const image = event.target;
+        if (!(image instanceof HTMLImageElement) || !image.matches('.track-item img')) return;
+        const sources = JSON.parse(image.dataset.imageSources || '[]');
+        const nextIndex = Number(image.dataset.imageIndex || 0) + 1;
+        if (nextIndex < sources.length) {
+            image.dataset.imageIndex = String(nextIndex);
+            image.src = sources[nextIndex];
+            return;
+        }
+        console.warn('Could not load an order item image:', image.currentSrc || image.src);
+        image.replaceWith(Object.assign(document.createElement('span'), {
+            className: 'thumb-fallback',
+            textContent: '🛍️',
+            ariaLabel: 'Product image unavailable'
+        }));
+    };
     const fmtDate = value => value ? new Date(value).toLocaleString() : '';
     const TRACKING_LABELS = [
         'Preparing to ship',
@@ -135,6 +163,7 @@
         'Out for delivery',
         'Delivered',
     ];
+    resultEl.addEventListener('error', handleTrackingImageError, true);
 
     let map = null;
     const pin = (emoji, size) => L.divIcon({ className: '', html: `<div class="map-icon">${emoji}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
@@ -235,8 +264,9 @@
         const cancelled = order.status === 'cancelled';
         const recipient = order.recipient || {};
         const items = (order.items || []).map(item => {
-            const thumb = item.image
-                ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" style="--photo-zoom:${Number(item.imageScale) || 1};">`
+            const imageUrls = productImageUrls(item);
+            const thumb = imageUrls.length
+                ? `<img src="${esc(imageUrls[0])}" data-image-sources="${esc(JSON.stringify(imageUrls))}" data-image-index="0" alt="${esc(item.name)}" style="--photo-zoom:${Number(item.imageScale) || 1};">`
                 : '🧢';
             return `<div class="track-item">
                 <div class="thumb"${item.bg ? ` style="background:${esc(item.bg)}22;"` : ''}>${thumb}</div>

@@ -258,13 +258,6 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     modalGallery = productGallery(p);
     modalGalleryIndex = 0;
     renderModalGallery(p);
-    const deliveryEstimate = document.getElementById('product-delivery-estimate');
-    if (deliveryEstimate) {
-        deliveryEstimate.innerHTML = canBuy
-            ? '<strong>Delivery estimate</strong><p>Enter a province and city to see the J&amp;T delivery estimate.</p><div class="product-estimate-fields"><input id="product-estimate-province" placeholder="Province" aria-label="Delivery province"><input id="product-estimate-city" placeholder="City or municipality" aria-label="Delivery city"><button type="button" onclick="estimateProductDelivery()">Check</button></div><p id="product-estimate-result" role="status"></p>'
-            : '';
-        deliveryEstimate.style.display = canBuy ? '' : 'none';
-    }
     document.getElementById('modal-img').style.background = p.bg + '15';
     document.getElementById('modal-cat').textContent  = p.cat;
     document.getElementById('modal-name').textContent = p.name;
@@ -334,36 +327,6 @@ function stepModalGallery(delta) {
     if (modalGallery.length < 2 || !currentProduct) return;
     modalGalleryIndex = (modalGalleryIndex + delta + modalGallery.length) % modalGallery.length;
     renderModalGallery(currentProduct);
-}
-
-async function estimateProductDelivery() {
-    const result = document.getElementById('product-estimate-result');
-    const province = document.getElementById('product-estimate-province')?.value.trim();
-    const city = document.getElementById('product-estimate-city')?.value.trim();
-    if (!currentProduct || !province || !city) {
-        if (result) result.textContent = 'Enter both province and city.';
-        return;
-    }
-    result.textContent = 'Calculating delivery estimate...';
-    try {
-        const response = await fetch(getApiUrl('/api/shipping/quote'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                addressParts: { province, city },
-                items: [{ product: { id: currentProduct.id }, qty: 1 }]
-            })
-        });
-        const data = await parseResponse(response);
-        if (!response.ok || !data.success) throw new Error(data.message || 'Unable to estimate delivery.');
-        const date = value => {
-            const [year, month, day] = value.split('-').map(Number);
-            return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        };
-        result.textContent = `Estimated delivery: ${date(data.estimatedDelivery.from)}–${date(data.estimatedDelivery.to)} · Shipping ₱${Number(data.shippingFee).toFixed(2)}`;
-    } catch (error) {
-        result.textContent = error.message || 'Unable to estimate delivery.';
-    }
 }
 
 function selectSize(size, btn) {
@@ -1031,7 +994,7 @@ const POLICY_CONTENT = {
             <h3>Prices and product details</h3>
             <p>Prices are shown in Philippine pesos and may change before an order is placed. We make reasonable efforts to show accurate product details and availability.</p>
             <h3>Delivery</h3>
-            <p>Delivery estimates are approximate and may be affected by the courier or circumstances outside our control. Use the order tracking link for the latest status.</p>
+            <p>Shipping fees are calculated from your delivery location and added to your checkout total. Use the order tracking link for status updates.</p>
             <h3>Contact</h3>
             <p>For questions about an order, use the Contact Us page and include your order number where possible.</p>`
     },
