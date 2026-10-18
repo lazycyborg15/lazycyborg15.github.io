@@ -524,6 +524,65 @@ const trackingUrl = (req, order) => `${siteBaseUrl(req)}/track/${encodeURICompon
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
+function trackingUpdateEmail(order, event, req) {
+  const step = TRACKING_STEPS[event.stepIndex];
+  const number = orderNumber(order);
+  const trackLink = trackingUrl(req, order);
+  const trackingNumber = String(order.trackingNumber || '');
+  const trackTemplate = process.env.JNT_TRACKING_URL_TEMPLATE || 'https://www.jtexpress.ph/';
+  const jntUrl = trackingNumber
+    ? trackTemplate.includes('{trackingNumber}')
+      ? trackTemplate.replaceAll('{trackingNumber}', encodeURIComponent(trackingNumber))
+      : trackTemplate
+    : '';
+  const isOutForDelivery = event.stepIndex === 6;
+  const isDelivered = event.stepIndex === 7;
+  const subject = isDelivered
+    ? `Your PYNX order ${number} has been delivered`
+    : isOutForDelivery
+      ? `Your PYNX order ${number} is out for delivery`
+      : `Your PYNX order ${number} is in transit`;
+  const update = isDelivered
+    ? `Your order has been delivered at ${event.location}.`
+    : isOutForDelivery
+      ? `Your package is out for delivery from ${event.location}.`
+      : `Your package is in transit. Latest update: ${step.title} at ${event.location}.`;
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    update,
+    '',
+    `Order number: ${number}`,
+    ...(trackingNumber ? [`J&T tracking number: ${trackingNumber}`] : []),
+    `Tracking update: ${step.title}`,
+    `Location: ${event.location}`,
+    `Track on our site: ${trackLink}`,
+    ...(jntUrl ? [`Track on J&T: ${jntUrl}`] : []),
+    '',
+    '- PYNX',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>${escapeHtml(update)}</p><p><strong>Order number:</strong> ${escapeHtml(number)}${trackingNumber ? `<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}` : ''}<br><strong>Tracking update:</strong> ${escapeHtml(step.title)}<br><strong>Location:</strong> ${escapeHtml(event.location)}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p>${jntUrl ? `<p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p>` : ''}<p>- PYNX</p></div>`;
+  return { subject, text, html };
+}
+
+async function sendTrackingUpdateEmail(order, event, req) {
+  const email = trackingUpdateEmail(order, event, req);
+  const result = await notifyCustomer(String(order.email || '').trim(), email.subject, email.text, email.html);
+  await withLock(async () => {
+    const orders = await loadOrders();
+    const stored = orders.find(item => item.id === order.id);
+    const storedEvent = stored?.trackingEvents?.find(item => item.at === event.at);
+    if (!storedEvent) throw new Error('Tracking update was not found while recording its email result.');
+    storedEvent.notification = {
+      sent: Boolean(result.emailSent),
+      error: result.emailError || null,
+      at: new Date().toISOString(),
+    };
+    await saveOrders(orders);
+  });
+  return result;
+}
+
 function orderItemLines(items) {
   return items.map(item => {
     const price = Number(item.product?.price) || 0;
@@ -1464,15 +1523,48 @@ app.post('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
       order.statusTimes = { ...(order.statusTimes || {}), [order.status]: event.at };
       if (point) order.currentLocation = { text: location, ...point, updatedAt: event.at };
       await saveOrders(orders);
-      return { order, locationFound: Boolean(point) };
+      return { order, event, locationFound: Boolean(point) };
     });
 
     if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
     if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
-    return res.json({ success: true, order: result.order, locationFound: result.locationFound });
+    const notificationRequired = stepIndex >= 2;
+    const emailResult = notificationRequired
+      ? await sendTrackingUpdateEmail(result.order, result.event, req)
+      : null;
+    return res.json({
+      success: true,
+      order: result.order,
+      locationFound: result.locationFound,
+      notificationRequired,
+      emailSent: emailResult ? Boolean(emailResult.emailSent) : null,
+      emailError: emailResult?.emailError || null,
+    });
   } catch (error) {
     console.error('Tracking update failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to save this tracking update.' });
+  }
+});
+
+app.post('/api/admin/orders/:id/tracking/:stepIndex/resend-email', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  const stepIndex = Number(req.params.stepIndex);
+  if (!Number.isInteger(stepIndex) || stepIndex < 2 || stepIndex >= TRACKING_STEPS.length) {
+    return res.status(400).json({ success: false, message: 'Choose a shipped tracking update to resend.' });
+  }
+  try {
+    const order = (await loadOrders()).find(item => item.id === orderId);
+    const event = order?.trackingEvents?.find(item => item.stepIndex === stepIndex);
+    if (!order || !event) return res.status(404).json({ success: false, message: 'Tracking update not found.' });
+    const emailResult = await sendTrackingUpdateEmail(order, event, req);
+    return res.json({
+      success: true,
+      emailSent: Boolean(emailResult.emailSent),
+      emailError: emailResult.emailError || null,
+    });
+  } catch (error) {
+    console.error('Tracking notification resend failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to resend the tracking notification.' });
   }
 });
 

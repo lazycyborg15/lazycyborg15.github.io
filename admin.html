@@ -286,6 +286,28 @@
         }
     }
 
+    async function resendTrackingEmail(orderId, stepIndex, button) {
+        button.disabled = true;
+        const token = getToken();
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking/${stepIndex}/resend-email`), {
+                method: 'POST',
+                headers: { 'Authorization': `****** }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to resend tracking notification.');
+            await fetchOrders();
+            adminStatus.textContent = data.emailSent
+                ? 'Tracking update email sent to the customer.'
+                : `Tracking update is saved, but the email failed: ${data.emailError || 'email is not configured.'}`;
+            adminStatus.classList.toggle('error', !data.emailSent);
+        } catch (error) {
+            adminStatus.textContent = error.message || 'Unable to resend tracking notification.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
     function mergeContacts(remote, local) {
         const combined = [...local, ...remote];
         const seen = new Set();
@@ -450,6 +472,10 @@
                                 <span>${receiptStatusHtml(order)} <button type="button" class="order-link-btn" data-resend-id="${esc(order.id)}">Resend receipt</button></span>
                             </div>
                             <div class="order-info-row">
+                                <label>Shipment update emails:</label>
+                                <span class="tracking-email-status">${trackingNotificationHtml(order)}</span>
+                            </div>
+                            <div class="order-info-row">
                                 <label>Delivery pin:</label>
                                 <span>${mapLinkHtml(order)}</span>
                             </div>
@@ -526,6 +552,19 @@
         return info.sent
             ? '<span class="receipt-note ok">Sent</span>'
             : `<span class="receipt-note fail">Not sent${info.error ? ': ' + esc(info.error) : ''}</span>`;
+    }
+
+    function trackingNotificationHtml(order) {
+        const updates = (order.trackingEvents || []).filter(event => event.stepIndex >= 2);
+        if (!updates.length) return '<span class="receipt-note">No shipment updates yet</span>';
+        return updates.map(event => {
+            const title = ADMIN_TRACKING_STEPS[event.stepIndex] || 'Tracking update';
+            const info = event.notification;
+            const status = info?.sent
+                ? '<span class="receipt-note ok">Sent</span>'
+                : `<span class="receipt-note fail">${info ? 'Failed' : 'Not sent'}${info?.error ? ': ' + esc(info.error) : ''}</span>`;
+            return `<small>${esc(title)}: ${status} <button type="button" class="order-link-btn" data-resend-tracking-email-order-id="${esc(order.id)}" data-resend-tracking-email-step-index="${event.stepIndex}">Retry email</button></small>`;
+        }).join('');
     }
 
     function mapLinkHtml(order) {
@@ -647,10 +686,16 @@
             const data = await parseResponse(response);
             if (!response.ok || !data.success) throw new Error(data.message || 'Unable to save tracking update.');
             await fetchOrders();
-            adminStatus.textContent = data.locationFound
-                ? 'Tracking step saved; the map pin has been updated.'
-                : 'Tracking step saved. The text location is visible, but it could not be placed on the map.';
-            adminStatus.classList.toggle('error', !data.locationFound);
+            const locationMessage = data.locationFound
+                ? 'The map pin has been updated.'
+                : 'The location text was saved but could not be placed on the map.';
+            const emailMessage = data.notificationRequired
+                ? data.emailSent
+                    ? ' Customer notification email sent.'
+                    : ` Customer email failed: ${data.emailError || 'email is not configured.'} Use Retry email after fixing email settings.`
+                : '';
+            adminStatus.textContent = `Tracking step saved. ${locationMessage}${emailMessage}`;
+            adminStatus.classList.toggle('error', !data.locationFound || (data.notificationRequired && !data.emailSent));
         } catch (error) {
             adminStatus.textContent = error.message || 'Unable to save tracking update.';
             adminStatus.classList.add('error');
@@ -720,6 +765,15 @@
         const resendButton = event.target.closest('[data-resend-id]');
         if (resendButton) {
             resendReceipt(resendButton.dataset.resendId, resendButton);
+            return;
+        }
+        const resendTrackingButton = event.target.closest('[data-resend-tracking-email-order-id]');
+        if (resendTrackingButton) {
+            resendTrackingEmail(
+                resendTrackingButton.dataset.resendTrackingEmailOrderId,
+                Number(resendTrackingButton.dataset.resendTrackingEmailStepIndex),
+                resendTrackingButton
+            );
             return;
         }
         const doneButton = event.target.closest('.order-done-btn');

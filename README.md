@@ -101,6 +101,7 @@ All `/api/admin/*` routes need `Authorization: Bearer <token>` from `POST /api/a
 | `POST /api/admin/login` | Staff login, returns a 2-hour token |
 | `GET /api/admin/orders` | All orders, newest first |
 | `POST /api/admin/orders/:id/tracking` | Post the next ordered J&T tracking step and location |
+| `POST /api/admin/orders/:id/tracking/:stepIndex/resend-email` | Retry a failed customer shipment-update email |
 | `PUT /api/admin/orders/:id/waybill` | Save a J&T waybill and email the tracking links |
 | `PATCH /api/admin/orders/:id/payment` | Mark delivered cash-on-delivery as paid |
 | `GET /api/admin/contacts` | Customer concerns |
