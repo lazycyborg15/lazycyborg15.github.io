@@ -12,6 +12,27 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const SEED_DIR = path.join(__dirname, '../data');
 const MONGODB_URI = process.env.MONGODB_URI || '';
 const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
+const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
+const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
+let SHIPPING_ZONES = [];
+if (process.env.SHIPPING_RATES_JSON) {
+  try {
+    SHIPPING_ZONES = JSON.parse(process.env.SHIPPING_RATES_JSON);
+    if (!Array.isArray(SHIPPING_ZONES)) throw new Error('Expected a JSON array of shipping zones.');
+  } catch (error) {
+    console.error('SHIPPING_RATES_JSON is invalid:', error.message);
+  }
+}
+const TRACKING_STEPS = [
+  { key: 'preparing_to_ship', title: 'Preparing to ship', requiresSpecificLocation: false },
+  { key: 'packaged_for_pickup', title: 'Packaged for pickup', requiresSpecificLocation: false },
+  { key: 'arrived_at_sorting_center', title: 'Package arrived at sorting center', requiresSpecificLocation: true },
+  { key: 'left_sorting_center', title: 'Package left the sorting center', requiresSpecificLocation: true },
+  { key: 'carrier_processing', title: 'Package is being processed by the carrier', requiresSpecificLocation: true },
+  { key: 'arrived_at_nearest_hub', title: 'Package arrived at the nearest hub', requiresSpecificLocation: true },
+  { key: 'out_for_delivery', title: 'Out for delivery', requiresSpecificLocation: true },
+  { key: 'delivered', title: 'Delivered', requiresSpecificLocation: true },
+];
 
 // Default records bundled by the serverless wrapper (the filesystem is not available there).
 let SEEDS = {};
@@ -74,6 +95,8 @@ async function appendItem(name, item) {
 }
 const loadContacts = () => loadCollection('contacts');
 const saveContacts = contacts => saveCollection('contacts', contacts);
+const loadNewsletterSubscribers = () => loadCollection('newsletterSubscribers');
+const saveNewsletterSubscribers = subscribers => saveCollection('newsletterSubscribers', subscribers);
 const loadProducts = () => loadCollection('products');
 const saveProducts = products => saveCollection('products', products);
 async function loadProductsWithPriceMigration() {
@@ -130,7 +153,11 @@ function verifyPassword(password, customer) {
 }
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 // The repo root is served as the site, so keep data and server files private.
 app.use((req, res, next) => {
   if (/^\/(data|server|\.git|\.github|node_modules)(\/|$)/i.test(decodeURIComponent(req.path)) || /\.(env|log)$/i.test(req.path)) {
@@ -225,6 +252,81 @@ async function notifyCustomer(to, subject, text, html) {
     console.error('Order saved, but customer confirmation email failed:', err);
     return { emailSent: false, emailError: err.message || 'Email send failed' };
   }
+}
+
+function newsletterApiBase(req) {
+  const configuredBase = process.env.PUBLIC_API_URL || process.env.URL || '';
+  const forwardedProtocol = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const protocol = forwardedProtocol || req.protocol;
+  return String(configuredBase || `${protocol}://${req.get('host')}`).replace(/\/+$/, '');
+}
+
+async function notifyNewsletterSubscribers(product, type, req) {
+  const subscribers = (await loadNewsletterSubscribers()).filter(subscriber => subscriber.active);
+  if (!subscribers.length) return { sent: 0, failed: 0 };
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.warn('Product email notification not sent: missing EMAIL_USER or EMAIL_PASS environment variables.');
+    return { sent: 0, failed: subscribers.length, error: 'Email is not configured on the server.' };
+  }
+
+  const discounted = Number(product.originalPrice) > Number(product.price);
+  const label = type === 'new' ? 'New at PYNX' : 'Now on sale at PYNX';
+  const subject = `${label}: ${String(product.name).replace(/[\r\n]/g, ' ').slice(0, 120)}`;
+  const siteBase = String(process.env.SITE_URL || process.env.URL || '').replace(/\/+$/, '');
+  const shopUrl = siteBase ? `${siteBase}/shop.html?view=${type === 'new' ? 'new' : 'sale'}` : '';
+  const apiBase = newsletterApiBase(req);
+
+  const results = await Promise.all(subscribers.map(async subscriber => {
+    const unsubscribeUrl = `${apiBase}/api/newsletter/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribeToken)}`;
+    const priceText = discounted
+      ? `Now PHP ${Number(product.price).toFixed(2)} (regularly PHP ${Number(product.originalPrice).toFixed(2)}).`
+      : `Price: PHP ${Number(product.price).toFixed(2)}.`;
+    const text = [
+      label,
+      '',
+      product.name,
+      priceText,
+      '',
+      shopUrl ? `Shop now: ${shopUrl}` : 'Visit the PYNX store to shop now.',
+      '',
+      `To stop receiving these emails, unsubscribe here: ${unsubscribeUrl}`,
+    ].join('\n');
+
+    try {
+      await transporter.sendMail({
+        from: mailFrom(),
+        replyTo: NOTIFY_EMAIL,
+        to: subscriber.email,
+        subject,
+        text,
+        headers: {
+          'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('Product email notification failed:', error);
+      return false;
+    }
+  }));
+
+  const sent = results.filter(Boolean).length;
+  const failed = results.length - sent;
+  return { sent, failed, ...(failed ? { error: 'Some notification emails could not be sent.' } : {}) };
+}
+
+async function unsubscribeFromNewsletter(token) {
+  if (!token) return false;
+  return withLock(async () => {
+    const subscribers = await loadNewsletterSubscribers();
+    const subscriber = subscribers.find(item => item.unsubscribeToken === token);
+    if (!subscriber) return false;
+    subscriber.active = false;
+    subscriber.unsubscribedAt = new Date().toISOString();
+    await saveNewsletterSubscribers(subscribers);
+    return true;
+  });
 }
 
 app.post('/api/customers/signup', async (req, res) => {
@@ -395,7 +497,7 @@ function siteBaseUrl(req) {
   return /^https?:\/\//i.test(configured) ? configured.replace(/\/+$/, '') : '';
 }
 
-const trackingUrl = (req, order) => `${siteBaseUrl(req)}/track.html?id=${encodeURIComponent(order.id)}`;
+const trackingUrl = (req, order) => `${siteBaseUrl(req)}/track/${encodeURIComponent(orderNumber(order))}`;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -407,6 +509,8 @@ function orderItemLines(items) {
       name: item.product?.name || 'Item',
       size: item.size || '',
       image: item.product?.image || '',
+      images: Array.isArray(item.product?.images) ? item.product.images : [],
+      fitImage: item.product?.fitImage || '',
       imageScale: Number(item.product?.imageScale) || 1,
       bg: item.product?.bg || '',
       qty,
@@ -423,9 +527,20 @@ function maskPhone(value) {
   return digits.slice(0, 3) + '*'.repeat(digits.length - 5) + digits.slice(-2);
 }
 
-// Package updates shown on the tracking page, newest first. Status changes come from the saved
-// timestamps and location updates from the admin, so older orders get a timeline too.
+// Package updates shown on the tracking page, newest first.
 function trackingEvents(order) {
+  if (Array.isArray(order.trackingEvents) && order.trackingEvents.length) {
+    return [...order.trackingEvents].reverse().map(event => {
+      const step = TRACKING_STEPS[event.stepIndex];
+      return {
+        at: event.at,
+        title: step?.title || 'Package update',
+        description: event.location,
+        major: true,
+        location: event.location,
+      };
+    });
+  }
   const times = order.statusTimes || {};
   const events = [{ at: order.createdAt, title: 'Preparing to ship', description: 'We received your order and are preparing your package.', major: true }];
   if (times.done) events.push({ at: times.done, title: 'Packed and ready to ship', description: 'Your package is packed and waiting for the courier to pick it up.', major: true });
@@ -444,7 +559,11 @@ function trackingEvents(order) {
 // Customer-safe view of an order. The link or order number plus email is what protects it, so the
 // recipient details are shown to whoever opens it, with the phone number masked.
 function publicOrder(order, map = {}) {
-  const current = order.status === 'shipped' ? order.currentLocation : null;
+  const latestTrackingEvent = order.trackingEvents?.[order.trackingEvents.length - 1];
+  const current = latestTrackingEvent?.point
+    ? { ...latestTrackingEvent.point, text: latestTrackingEvent.location, updatedAt: latestTrackingEvent.at }
+    : order.status === 'shipped' ? order.currentLocation : null;
+  const latestStep = latestTrackingEvent?.stepIndex ?? -1;
   return {
     id: order.id,
     orderNumber: orderNumber(order),
@@ -455,7 +574,18 @@ function publicOrder(order, map = {}) {
     statusUpdatedAt: order.statusUpdatedAt || null,
     statusTimes: order.statusTimes || {},
     events: trackingEvents(order),
-    estimatedDelivery: deliveryEstimate(order),
+    trackingStepIndex: latestStep,
+    trackingSteps: TRACKING_STEPS.map(step => step.title),
+    trackingNumber: order.trackingNumber || null,
+    jntTrackingUrl: order.trackingNumber
+      ? (process.env.JNT_TRACKING_URL_TEMPLATE || 'https://www.jtexpress.ph/').includes('{trackingNumber}')
+        ? (process.env.JNT_TRACKING_URL_TEMPLATE || 'https://www.jtexpress.ph/').replaceAll('{trackingNumber}', encodeURIComponent(order.trackingNumber))
+        : process.env.JNT_TRACKING_URL_TEMPLATE || 'https://www.jtexpress.ph/'
+      : null,
+    paymentMethod: order.paymentMethod || null,
+    paymentStatus: order.paymentStatus || 'pending',
+    shippingFee: Number(order.shippingFee) || 0,
+    estimatedDelivery: order.estimatedDelivery || deliveryEstimate(order),
     currentLocation: current ? { text: current.text, updatedAt: current.updatedAt } : null,
     map: {
       destination: map.destination || null,
@@ -494,10 +624,14 @@ function receiptEmail(order, link) {
     `Order number: ${number}`,
     `Order placed: ${placed}`,
     `Estimated delivery: ${estimate}`,
+    `Payment method: ${order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card'}`,
+    `Payment status: ${order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}`,
     '',
     'Items:',
     ...(lines.map(l => `${l.name}${l.size ? ` / ${l.size}` : ''} x${l.qty} - PHP ${l.lineTotal.toFixed(2)}`)),
     '',
+    `Subtotal: PHP ${Number(order.subtotal || order.total - (order.shippingFee || 0)).toFixed(2)}`,
+    `Shipping: PHP ${Number(order.shippingFee || 0).toFixed(2)}`,
     `Total: PHP ${order.total.toFixed(2)}`,
     `Shipping address: ${order.address}`,
     `View on Google Maps: ${mapsLink}`,
@@ -516,27 +650,12 @@ function receiptEmail(order, link) {
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
 <p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
 <p style="background:#f4f4f0;padding:12px 16px;border-radius:6px"><strong>Estimated delivery:</strong> ${escapeHtml(estimate)}</p>
-<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
+<p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
+<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal || order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0">Shipping</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
 <p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
 <p>- PYNX</p></div>`;
   return { text, html };
-}
-
-// Short updates sent when an order moves forward.
-function statusEmail(order, status, link) {
-  const number = orderNumber(order);
-  const estimate = formatEstimate(deliveryEstimate(order));
-  const items = orderItemLines(order.items || [])
-    .map(item => `${item.name}${item.size ? ` / ${item.size}` : ''} x${item.qty}`)
-    .join('\n');
-  const messages = {
-    done: [`Your PYNX order ${number} is packed and ready to ship`, `Good news! Your order ${number} is packed and ready to ship.`],
-    shipped: [`Your PYNX order ${number} is on the way`, `Your order ${number} is on the way to you.${order.currentLocation?.text ? `\nLatest location: ${order.currentLocation.text}` : ''}\nEstimated delivery: ${estimate}`],
-    delivered: [`Your PYNX order ${number} was delivered`, `All items in your order ${number} have been delivered.\n\nDelivered items:\n${items}\n\nThank you for shopping with PYNX!`],
-  };
-  const [subject, body] = messages[status];
-  return { subject, text: `Hi ${order.firstName},\n\n${body}\n${link && status !== 'delivered' ? `\nTrack your order: ${link}\n` : ''}\n- PYNX` };
 }
 
 const clean = (value, max = 120) => String(value || '').trim().slice(0, max);
@@ -556,6 +675,80 @@ function cleanAddressParts(parts) {
 }
 
 const formatAddressParts = parts => [parts.street, parts.barangay, parts.city, parts.province, parts.postalCode, parts.region].filter(Boolean).join(', ');
+
+function normalizeLocation(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+function cleanProductImages(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 8) return null;
+  const images = value.map(image => String(image || '').trim());
+  if (images.some(image => !image || image.length > 500 || /^(?:javascript|data):/i.test(image))) return null;
+  return [...new Set(images)];
+}
+
+function shippingQuote(addressParts, items, products, referenceDate = new Date().toISOString()) {
+  if (!SHIPPING_ZONES.length) {
+    return { error: 'Shipping rates are not configured yet. Please contact the store before ordering.' };
+  }
+  const province = normalizeLocation(addressParts.province);
+  const city = normalizeLocation(addressParts.city);
+  const zone = SHIPPING_ZONES.find(candidate => {
+    const provinces = Array.isArray(candidate.provinces) ? candidate.provinces.map(normalizeLocation) : [];
+    const cities = Array.isArray(candidate.cities) ? candidate.cities.map(normalizeLocation) : [];
+    return provinces.includes(province) || cities.includes(city);
+  });
+  if (!zone || !Array.isArray(zone.rates) || !zone.rates.length) {
+    return { error: `We do not have a shipping rate for ${addressParts.city}, ${addressParts.province} yet.` };
+  }
+  if (!Number.isInteger(zone.deliveryMinDays) || !Number.isInteger(zone.deliveryMaxDays) || zone.deliveryMinDays < 0 || zone.deliveryMaxDays < zone.deliveryMinDays) {
+    console.error(`Shipping zone "${zone.name || 'unnamed'}" has invalid delivery-day ranges.`);
+    return { error: 'The delivery estimate for this location is not configured correctly. Please contact the store.' };
+  }
+
+  let totalWeightGrams = 0;
+  let subtotal = 0;
+  const normalizedItems = [];
+  for (const item of items) {
+    const product = products.find(candidate => String(candidate.id) === String(item.product?.id));
+    if (!product) return { error: `${item.product?.name || 'A product'} is no longer available. Please refresh your cart.` };
+    if (!Number.isInteger(product.weightGrams) || product.weightGrams <= 0) {
+      return { error: `Packed weight has not been set for ${product.name}. Please contact the store.` };
+    }
+    const quantity = Number(item.qty);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+      return { error: 'Order quantities must be whole numbers between 1 and 99.' };
+    }
+    totalWeightGrams += product.weightGrams * quantity;
+    subtotal += Number(product.price) * quantity;
+    normalizedItems.push({
+      product: { ...product },
+      qty: quantity,
+      size: clean(item.size, 20),
+    });
+  }
+
+  const rate = zone.rates
+    .filter(candidate => Number.isInteger(candidate.maxWeightGrams) && candidate.maxWeightGrams >= totalWeightGrams)
+    .sort((a, b) => a.maxWeightGrams - b.maxWeightGrams)[0];
+  if (!rate || !Number.isFinite(rate.fee) || rate.fee < 0) {
+    return { error: `No shipping rate covers this ${totalWeightGrams} g package for ${zone.name || 'this zone'}. Please contact the store.` };
+  }
+
+  return {
+    zone: String(zone.name || 'Shipping zone').slice(0, 80),
+    shippingFee: Number(rate.fee),
+    totalWeightGrams,
+    subtotal,
+    total: subtotal + Number(rate.fee),
+    estimatedDelivery: {
+      from: addDays(referenceDate, zone.deliveryMinDays),
+      to: addDays(referenceDate, zone.deliveryMaxDays),
+    },
+    items: normalizedItems,
+  };
+}
 
 // Pin placed by the customer on the checkout map.
 function cleanPoint(point) {
@@ -579,13 +772,214 @@ async function recordReceiptResult(orderId, result) {
   }
 }
 
+async function sendOrderReceipt(order, req) {
+  const link = trackingUrl(req, order);
+  const receipt = receiptEmail(order, link);
+  const result = await notifyCustomer(
+    String(order.email).trim(),
+    `Your PYNX order receipt (${orderNumber(order)})`,
+    receipt.text,
+    receipt.html
+  );
+  await recordReceiptResult(order.id, result);
+  return result;
+}
+
+async function createPayMongoCheckout(order, req) {
+  if (!PAYMONGO_SECRET_KEY) throw new Error('Online payments are not configured. Please choose cash on delivery or contact the store.');
+  const lineItems = order.items.map(item => ({
+    currency: 'PHP',
+    amount: Math.round(Number(item.product.price) * 100),
+    name: String(item.product.name).slice(0, 100),
+    quantity: item.qty,
+  }));
+  if (order.shippingFee > 0) {
+    lineItems.push({
+      currency: 'PHP',
+      amount: Math.round(order.shippingFee * 100),
+      name: 'J&T shipping',
+      quantity: 1,
+    });
+  }
+  const base = siteBaseUrl(req);
+  const response = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${PAYMONGO_SECRET_KEY}:`).toString('base64')}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          cancel_url: `${base}/track/${encodeURIComponent(orderNumber(order))}?payment=cancelled`,
+          success_url: `${base}/track/${encodeURIComponent(orderNumber(order))}?payment=success`,
+          description: `PYNX order ${orderNumber(order)}`,
+          reference_number: orderNumber(order),
+          payment_method_types: ['gcash', 'card'],
+          line_items: lineItems,
+          metadata: { order_id: order.id, order_number: orderNumber(order) },
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(12000),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('PayMongo checkout creation failed:', result.errors || response.status);
+    throw new Error('Unable to start PayMongo checkout. Please try again or choose cash on delivery.');
+  }
+  const session = result.data;
+  if (!session?.id || !session.attributes?.checkout_url) {
+    console.error('PayMongo returned an incomplete checkout session.');
+    throw new Error('PayMongo did not return a checkout link. Please try again.');
+  }
+  return { id: session.id, url: session.attributes.checkout_url };
+}
+
+async function rollbackUnpaidOrder(order) {
+  await withLock(async () => {
+    const [orders, products] = await Promise.all([loadOrders(), loadProducts()]);
+    const stored = orders.find(item => item.id === order.id);
+    if (!stored || stored.paymentStatus === 'paid') return;
+    for (const reservation of stored.inventoryReservations || []) {
+      const product = products.find(item => String(item.id) === String(reservation.productId));
+      if (product && Number.isInteger(product.stock)) product.stock += reservation.quantity;
+    }
+    await saveProducts(products);
+    await saveOrders(orders.filter(item => item.id !== order.id));
+  });
+}
+
+app.post('/api/shipping/quote', async (req, res) => {
+  const suppliedAddress = req.body.addressParts || {};
+  const addressParts = {
+    region: clean(suppliedAddress.region, 40),
+    province: clean(suppliedAddress.province),
+    city: clean(suppliedAddress.city),
+    barangay: '',
+    postalCode: '',
+    street: '',
+  };
+  if (!addressParts.province || !addressParts.city || !Array.isArray(req.body.items) || req.body.items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Enter your province and city and add an item to your cart.' });
+  }
+  try {
+    const quote = shippingQuote(addressParts, req.body.items, await loadProducts());
+    if (quote.error) return res.status(422).json({ success: false, message: quote.error });
+    return res.json({
+      success: true,
+      zone: quote.zone,
+      shippingFee: quote.shippingFee,
+      totalWeightGrams: quote.totalWeightGrams,
+      subtotal: quote.subtotal,
+      total: quote.total,
+      estimatedDelivery: quote.estimatedDelivery,
+    });
+  } catch (error) {
+    console.error('Shipping quote failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to calculate shipping right now.' });
+  }
+});
+
+app.get('/api/checkout/config', (req, res) => {
+  const onlinePaymentsEnabled = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
+  res.set('Cache-Control', 'no-store');
+  return res.json({
+    success: true,
+    onlinePaymentsEnabled,
+    shippingConfigured: SHIPPING_ZONES.length > 0,
+  });
+});
+
+app.post('/api/webhooks/paymongo', async (req, res) => {
+  if (!PAYMONGO_SECRET_KEY || !PAYMONGO_WEBHOOK_SECRET) {
+    return res.status(503).json({ success: false, message: 'PayMongo webhook is not configured.' });
+  }
+  const signatureHeader = String(req.get('paymongo-signature') || '');
+  const signatureParts = Object.fromEntries(signatureHeader.split(',').map(part => {
+    const [key, value] = part.trim().split('=');
+    return [key, value];
+  }).filter(([key, value]) => key && value));
+  const timestamp = signatureParts.t;
+  const signature = PAYMONGO_SECRET_KEY.startsWith('sk_live_') ? signatureParts.li : signatureParts.te;
+  if (!timestamp || !signature || !req.rawBody) {
+    return res.status(400).json({ success: false, message: 'Invalid PayMongo webhook signature.' });
+  }
+  const expected = crypto.createHmac('sha256', PAYMONGO_WEBHOOK_SECRET)
+    .update(`${timestamp}.${req.rawBody.toString('utf8')}`)
+    .digest('hex');
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(signature);
+  if (expectedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
+    return res.status(400).json({ success: false, message: 'Invalid PayMongo webhook signature.' });
+  }
+
+  const event = req.body?.data?.attributes;
+  const eventType = String(event?.type || '');
+  if (eventType !== 'checkout_session.payment.paid') return res.json({ success: true, ignored: true });
+  const sessionId = String(event?.data?.id || '');
+  if (!sessionId) return res.status(400).json({ success: false, message: 'PayMongo event is missing the checkout session ID.' });
+
+  try {
+    const response = await fetch(`https://api.paymongo.com/v1/checkout_sessions/${encodeURIComponent(sessionId)}`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${PAYMONGO_SECRET_KEY}:`).toString('base64')}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Could not verify PayMongo checkout session:', result.errors || response.status);
+      return res.status(502).json({ success: false, message: 'Could not verify the PayMongo payment.' });
+    }
+    const session = result.data;
+    const attributes = session?.attributes || {};
+    if (attributes.status !== 'paid') return res.status(202).json({ success: true, pending: true });
+    const orderId = String(attributes.metadata?.order_id || '');
+    const order = await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId && item.paymongoSessionId === sessionId);
+      if (!stored) return null;
+      if (attributes.reference_number !== orderNumber(stored)
+        || String(attributes.currency || '').toUpperCase() !== 'PHP'
+        || Number(attributes.amount) !== Math.round(Number(stored.total) * 100)) return null;
+      if (stored.paymentStatus !== 'paid') {
+        stored.paymentStatus = 'paid';
+        stored.paidAt = new Date().toISOString();
+        stored.paymongoPaymentId = attributes.payments?.[0]?.id || null;
+        await saveOrders(orders);
+      }
+      return stored;
+    });
+    if (!order) {
+      console.error('PayMongo paid event did not match an order, session, amount, or currency.');
+      return res.status(400).json({ success: false, message: 'Payment does not match an order.' });
+    }
+    if (!order.receiptEmail?.sent) await sendOrderReceipt(order, req);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('PayMongo webhook processing failed:', error);
+    return res.status(500).json({ success: false, message: 'Could not process the payment webhook.' });
+  }
+});
+
 app.post('/api/orders', async (req, res) => {
   const { firstName, lastName, email, contact, items = [] } = req.body;
+  const paymentMethod = String(req.body.paymentMethod || '');
   const addressParts = cleanAddressParts(req.body.addressParts);
   const address = addressParts ? formatAddressParts(addressParts) : clean(req.body.address, 400);
 
   if (!firstName || !lastName || !address || !email || !contact) {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
+  }
+  if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
+  if (!['gcash', 'card', 'cash_on_hand'].includes(paymentMethod)) {
+    return res.status(400).json({ success: false, message: 'Choose GCash, card, or cash on delivery.' });
+  }
+  if (paymentMethod !== 'cash_on_hand' && (!PAYMONGO_SECRET_KEY || !PAYMONGO_WEBHOOK_SECRET)) {
+    return res.status(503).json({ success: false, message: 'Online payments are not fully configured yet. Please choose cash on delivery.' });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
@@ -596,25 +990,27 @@ app.post('/api/orders', async (req, res) => {
 
   const order = {
     id: crypto.randomUUID(),
-    firstName,
-    lastName,
+    firstName: clean(firstName, 80),
+    lastName: clean(lastName, 80),
     address,
-    ...(addressParts ? { addressParts } : {}),
+    addressParts,
     ...(cleanPoint(req.body.location) ? { destination: cleanPoint(req.body.location) } : {}),
-    email,
-    contact,
-    items,
+    email: String(email).trim().toLowerCase(),
+    contact: clean(contact, 32),
     inventoryReservations: [],
-    total: items.reduce((sum, item) => sum + (Number(item.product?.price) || 0) * (Number(item.qty) || 0), 0),
+    paymentMethod,
+    paymentStatus: paymentMethod === 'cash_on_hand' ? 'pending' : 'awaiting_payment',
     status: 'processing',
+    trackingStepIndex: -1,
+    trackingEvents: [],
     createdAt: new Date().toISOString(),
   };
-  order.estimatedDeliveryFrom = addDays(order.createdAt, DELIVERY_MIN_DAYS);
-  order.estimatedDeliveryTo = addDays(order.createdAt, DELIVERY_MAX_DAYS);
 
   try {
     const result = await withLock(async () => {
       const products = await loadProducts();
+      const quote = shippingQuote(addressParts, items, products, order.createdAt);
+      if (quote.error) return { error: quote.error };
       const quantities = new Map();
       for (const item of items) {
         const productId = String(item.product?.id ?? '');
@@ -630,6 +1026,15 @@ app.post('/api/orders', async (req, res) => {
         }
       }
 
+      order.items = quote.items;
+      order.subtotal = quote.subtotal;
+      order.shippingFee = quote.shippingFee;
+      order.total = quote.total;
+      order.shippingZone = quote.zone;
+      order.totalWeightGrams = quote.totalWeightGrams;
+      order.estimatedDelivery = quote.estimatedDelivery;
+      order.estimatedDeliveryFrom = quote.estimatedDelivery.from;
+      order.estimatedDeliveryTo = quote.estimatedDelivery.to;
       const originalProducts = products.map(product => ({ ...product }));
       quantities.forEach((quantity, productId) => {
         const product = products.find(candidate => String(candidate.id) === productId);
@@ -661,32 +1066,54 @@ app.post('/api/orders', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Order save failed. Please try again later.' });
   }
 
-  const itemLine = items.map(item => {
+  if (paymentMethod !== 'cash_on_hand') {
+    try {
+      const session = await createPayMongoCheckout(order, req);
+      await withLock(async () => {
+        const orders = await loadOrders();
+        const stored = orders.find(item => item.id === order.id);
+        if (stored) {
+          stored.paymongoSessionId = session.id;
+          await saveOrders(orders);
+        }
+      });
+      return res.status(201).json({
+        success: true,
+        order: { ...order, orderNumber: orderNumber(order) },
+        checkoutUrl: session.url,
+        trackingPath: `/track/${encodeURIComponent(orderNumber(order))}`,
+      });
+    } catch (error) {
+      console.error('Online checkout setup failed:', error.message);
+      try {
+        await rollbackUnpaidOrder(order);
+      } catch (rollbackError) {
+        console.error('Could not roll back order after payment setup failed:', rollbackError);
+      }
+      return res.status(502).json({ success: false, message: error.message || 'Unable to start online payment.' });
+    }
+  }
+
+  const itemLine = order.items.map(item => {
     const sizeText = item.size ? ` / ${item.size}` : '';
     const price = Number(item.product?.price) || 0;
     return `${item.product?.name || 'Item'} x${item.qty || 1}${sizeText} - PHP ${price.toFixed(2)} each`;
   }).join('\n') || 'No items.';
 
   const link = trackingUrl(req, order);
-  const receipt = receiptEmail(order, siteBaseUrl(req) ? link : '');
   Promise.all([
     notifyAdmins(
-      `New order received from ${firstName} ${lastName}`,
-      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
+      `New cash-on-delivery order from ${firstName} ${lastName}`,
+      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nShipping: PHP ${order.shippingFee.toFixed(2)}\nTotal: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
     ),
-    notifyCustomer(
-      String(email).trim(),
-      `Your PYNX order receipt (${orderNumber(order)})`,
-      receipt.text,
-      receipt.html
-    ),
-  ]).then(([, customerEmail]) => recordReceiptResult(order.id, customerEmail))
+    sendOrderReceipt(order, req),
+  ]).then(() => {})
     .catch(error => console.error('Order notification processing failed:', error));
 
   return res.status(201).json({
     success: true,
     order: { ...order, orderNumber: orderNumber(order) },
-    trackingPath: `/track.html?id=${encodeURIComponent(order.id)}`,
+    trackingPath: `/track/${encodeURIComponent(orderNumber(order))}`,
     customerEmailPending: true,
     receiptEmailConfigured: Boolean(EMAIL_USER && EMAIL_PASS),
   });
@@ -704,6 +1131,10 @@ app.get('/api/orders/track', async (req, res) => {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Unable to look up your order right now.' });
   }
+});
+
+app.get('/track/:orderNumber', (req, res) => {
+  res.sendFile(path.join(__dirname, '../track.html'));
 });
 
 // Fallback for customers who lost the link: order number plus the email used at checkout.
@@ -730,6 +1161,68 @@ app.get('/api/products', async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load products.' });
+  }
+});
+
+app.post('/api/newsletter/subscribe', async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+  }
+
+  try {
+    const result = await withLock(async () => {
+      const subscribers = await loadNewsletterSubscribers();
+      const existing = subscribers.find(item => item.email === email);
+      if (existing?.active) return { alreadySubscribed: true };
+      if (existing) {
+        existing.active = true;
+        existing.unsubscribeToken = crypto.randomBytes(24).toString('hex');
+        existing.subscribedAt = new Date().toISOString();
+        delete existing.unsubscribedAt;
+      } else {
+        subscribers.push({
+          email,
+          active: true,
+          unsubscribeToken: crypto.randomBytes(24).toString('hex'),
+          subscribedAt: new Date().toISOString(),
+        });
+      }
+      await saveNewsletterSubscribers(subscribers);
+      return { alreadySubscribed: false };
+    });
+
+    return res.status(result.alreadySubscribed ? 200 : 201).json({
+      success: true,
+      alreadySubscribed: result.alreadySubscribed,
+      message: result.alreadySubscribed ? 'This email is already subscribed.' : 'You are subscribed to PYNX updates.',
+    });
+  } catch (error) {
+    console.error('Newsletter subscription failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to subscribe right now. Please try again later.' });
+  }
+});
+
+app.get('/api/newsletter/unsubscribe', async (req, res) => {
+  try {
+    const token = String(req.query.token || '');
+    const validToken = (await loadNewsletterSubscribers()).some(subscriber => subscriber.unsubscribeToken === token);
+    if (!validToken) return res.status(404).send('This unsubscribe link is invalid or has expired.');
+    return res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><title>PYNX email preferences</title><body><h1>Email preferences</h1><p>Stop receiving PYNX product and sale updates.</p><form method="post" action="/api/newsletter/unsubscribe?token=${encodeURIComponent(token)}"><button type="submit">Unsubscribe</button></form></body></html>`);
+  } catch (error) {
+    console.error('Newsletter unsubscribe failed:', error);
+    return res.status(500).send('Unable to update your email preferences right now.');
+  }
+});
+
+app.post('/api/newsletter/unsubscribe', async (req, res) => {
+  try {
+    const unsubscribed = await unsubscribeFromNewsletter(String(req.query.token || ''));
+    if (!unsubscribed) return res.status(404).json({ success: false, message: 'This unsubscribe link is invalid or has expired.' });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Newsletter unsubscribe failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to update your email preferences right now.' });
   }
 });
 
@@ -928,6 +1421,128 @@ app.patch('/api/orders/:id/cancel', async (req, res) => {
   }
 });
 
+app.post('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  const stepIndex = Number(req.body.stepIndex);
+  const location = clean(req.body.location, 200);
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= TRACKING_STEPS.length) {
+    return res.status(400).json({ success: false, message: 'Choose one of the eight supported tracking steps.' });
+  }
+  if (!location) return res.status(400).json({ success: false, message: 'Enter the location for this tracking update.' });
+
+  try {
+    const point = await geocode(location);
+    const result = await withLock(async () => {
+      const orders = await loadOrders();
+      const order = orders.find(item => item.id === orderId);
+      if (!order) return { missing: true };
+      if (order.status === 'cancelled') return { invalid: 'Cancelled orders cannot receive tracking updates.' };
+      if (stepIndex !== (Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1) + 1) {
+        return { invalid: `Post the next step in order: ${TRACKING_STEPS[(order.trackingStepIndex ?? -1) + 1]?.title || 'tracking is complete'}.` };
+      }
+      const event = { stepIndex, location, ...(point ? { point } : {}), at: new Date().toISOString() };
+      order.trackingEvents = [...(order.trackingEvents || []), event];
+      order.trackingStepIndex = stepIndex;
+      order.status = stepIndex === TRACKING_STEPS.length - 1
+        ? 'delivered'
+        : stepIndex < 2 ? (stepIndex === 0 ? 'processing' : 'done') : 'shipped';
+      order.statusUpdatedAt = event.at;
+      order.statusTimes = { ...(order.statusTimes || {}), [order.status]: event.at };
+      if (point) order.currentLocation = { text: location, ...point, updatedAt: event.at };
+      await saveOrders(orders);
+      return { order, locationFound: Boolean(point) };
+    });
+
+    if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
+    return res.json({ success: true, order: result.order, locationFound: result.locationFound });
+  } catch (error) {
+    console.error('Tracking update failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to save this tracking update.' });
+  }
+});
+
+app.put('/api/admin/orders/:id/waybill', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  const trackingNumber = String(req.body.trackingNumber || '').trim();
+  if (!/^[A-Za-z0-9-]{5,40}$/.test(trackingNumber)) {
+    return res.status(400).json({ success: false, message: 'Enter a J&T waybill number between 5 and 40 letters or digits.' });
+  }
+
+  try {
+    const order = await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId);
+      if (!stored) return null;
+      if (stored.trackingNumber === trackingNumber && stored.waybillEmail?.sent) return { ...stored, waybillUnchanged: true };
+      stored.trackingNumber = trackingNumber;
+      stored.waybillEmail = stored.waybillEmail || { sent: false, at: null, error: null };
+      await saveOrders(orders);
+      return stored;
+    });
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (order.waybillUnchanged) return res.json({ success: true, order, emailSent: Boolean(order.waybillEmail?.sent), unchanged: true });
+
+    const trackLink = trackingUrl(req, order);
+    const trackTemplate = process.env.JNT_TRACKING_URL_TEMPLATE || 'https://www.jtexpress.ph/';
+    const jntUrl = trackTemplate.includes('{trackingNumber}')
+      ? trackTemplate.replaceAll('{trackingNumber}', encodeURIComponent(trackingNumber))
+      : trackTemplate;
+    const estimate = formatEstimate(deliveryEstimate(order));
+    const subject = `Your PYNX order ${orderNumber(order)} has shipped`;
+    const text = [
+      `Hi ${order.firstName},`,
+      '',
+      'Your PYNX order has been handed to J&T Express.',
+      `Order number: ${orderNumber(order)}`,
+      `J&T tracking number: ${trackingNumber}`,
+      `Track on our site: ${trackLink}`,
+      `Estimated delivery: ${estimate}`,
+      `Track on J&T: ${jntUrl}`,
+      '',
+      '- PYNX',
+    ].join('\n');
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)}, your order has shipped with J&amp;T Express.</p><p><strong>Order number:</strong> ${escapeHtml(orderNumber(order))}<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}<br><strong>Estimated delivery:</strong> ${escapeHtml(estimate)}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p><p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p></div>`;
+    const emailResult = await notifyCustomer(String(order.email).trim(), subject, text, html);
+    await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId);
+      if (stored) {
+        stored.waybillEmail = { sent: emailResult.emailSent, at: new Date().toISOString(), error: emailResult.emailError };
+        await saveOrders(orders);
+      }
+    });
+    return res.json({ success: true, order, emailSent: emailResult.emailSent, emailError: emailResult.emailError });
+  } catch (error) {
+    console.error('Saving J&T waybill failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to save the J&T waybill.' });
+  }
+});
+
+app.patch('/api/admin/orders/:id/payment', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  try {
+    const order = await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId);
+      if (!stored) return { missing: true };
+      if (stored.paymentMethod !== 'cash_on_hand') return { invalid: 'Only cash-on-delivery payments can be marked paid by an admin.' };
+      if (stored.status !== 'delivered') return { invalid: 'Cash on delivery can be marked paid after the order is delivered.' };
+      if (stored.paymentStatus === 'paid') return { unchanged: true, order: stored };
+      stored.paymentStatus = 'paid';
+      stored.paidAt = new Date().toISOString();
+      await saveOrders(orders);
+      return { order: stored };
+    });
+    if (order.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (order.invalid) return res.status(409).json({ success: false, message: order.invalid });
+    return res.json({ success: true, order: order.order, unchanged: Boolean(order.unchanged) });
+  } catch (error) {
+    console.error('Payment status update failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to mark this order paid.' });
+  }
+});
+
 app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const status = String(req.body.status || '');
@@ -952,58 +1567,7 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
     }
   }
 
-  try {
-    // Looked up before taking the write lock because geocoding can take a few seconds.
-    const point = location ? await geocode(location) : null;
-
-    const result = await withLock(async () => {
-      const orders = await loadOrders();
-      const order = orders.find(item => item.id === orderId);
-      if (!order) return null;
-
-      const previous = order.status || 'processing';
-      if (previous === 'cancelled') return { invalid: 'Cancelled orders cannot be reopened.' };
-      const changed = previous !== status;
-      const now = new Date().toISOString();
-      order.status = status;
-      if (changed) {
-        order.statusUpdatedAt = now;
-        const times = order.statusTimes || {};
-        ORDER_STATUSES.forEach((name, index) => {
-          if (index > ORDER_STATUSES.indexOf(status)) delete times[name];
-        });
-        times[status] = now;
-        order.statusTimes = times;
-      }
-      if (ORDER_STATUSES.indexOf(status) < ORDER_STATUSES.indexOf('shipped')) delete order.locationUpdates;
-      if (status !== 'shipped') {
-        delete order.currentLocation;
-      } else if (location) {
-        order.currentLocation = { text: location, ...(point || {}), updatedAt: now };
-        order.locationUpdates = [...(order.locationUpdates || []), { text: location, at: now }];
-      }
-      await saveOrders(orders);
-      const flowStatuses = ORDER_STATUSES.filter(name => name !== 'cancelled');
-      return { order, changed, advanced: changed && flowStatuses.includes(status) && flowStatuses.includes(previous) && flowStatuses.indexOf(status) > flowStatuses.indexOf(previous) };
-    });
-    if (!result) {
-      return res.status(404).json({ success: false, message: 'Order not found.' });
-    }
-    if (result.invalid) {
-      return res.status(409).json({ success: false, message: result.invalid });
-    }
-
-    // Tell the customer when the order moves forward (never when an admin undoes a step).
-    if (result.advanced && status !== 'processing' && result.order.email) {
-      const link = siteBaseUrl(req) ? trackingUrl(req, result.order) : '';
-      const mail = statusEmail(result.order, status, link);
-      await notifyCustomer(String(result.order.email).trim(), mail.subject, mail.text);
-    }
-    return res.json({ success: true, order: result.order, locationFound: location ? Boolean(point) : undefined });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, message: 'Failed to update order status.' });
-  }
+  return res.status(400).json({ success: false, message: 'Use the ordered tracking-step endpoint to update shipping status.' });
 });
 
 app.delete('/api/admin/orders/:id', verifyAdmin, async (req, res) => {
@@ -1037,9 +1601,64 @@ app.get('/api/admin/products', verifyAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/admin/products', verifyAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim();
+  const type = String(req.body.type || '');
+  const image = String(req.body.image || '').trim();
+  const desc = String(req.body.desc || '').trim();
+  const price = Number(req.body.price);
+  const weightGrams = Number(req.body.weightGrams);
+  const images = cleanProductImages(req.body.images || []);
+  const fitImage = String(req.body.fitImage || '').trim();
+
+  if (!name || name.length > 200 || !['cap', 'bikini'].includes(type) || !Number.isFinite(price) || price < 0 || !image || image.length > 500 || /^(?:javascript|data):/i.test(image) || desc.length > 2000 || !Number.isInteger(weightGrams) || weightGrams < 1 || !images || fitImage.length > 500 || /^(?:javascript|data):/i.test(fitImage)) {
+    return res.status(400).json({ success: false, message: 'Provide a product name, category, valid price and image path, packed weight in grams, and valid gallery image paths.' });
+  }
+
+  try {
+    const product = await withLock(async () => {
+      const products = await loadProducts();
+      const nextId = products.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+      const created = {
+        id: nextId,
+        name,
+        cat: type === 'cap' ? 'Headwear' : 'Swimwear',
+        price,
+        originalPrice: price,
+        type,
+        emoji: type === 'cap' ? '🧢' : '👙',
+        image,
+        weightGrams,
+        bg: '#1a1a1a',
+        desc,
+        onSale: false,
+        createdAt: new Date().toISOString(),
+      };
+      if (images.length) created.images = images;
+      if (fitImage) created.fitImage = fitImage;
+      if (type === 'bikini') created.sizes = ['S', 'M', 'L'];
+      await saveProducts([...products, created]);
+      return created;
+    });
+
+    let newsletterNotification;
+    try {
+      newsletterNotification = await notifyNewsletterSubscribers(product, 'new', req);
+    } catch (error) {
+      console.error('Product saved, but newsletter notification failed:', error);
+      newsletterNotification = { sent: 0, failed: 0, error: 'Product saved, but notification emails could not be processed.' };
+    }
+    return res.status(201).json({ success: true, product, newsletterNotification });
+  } catch (error) {
+    console.error('Product creation failed:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create product.' });
+  }
+});
+
 app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
   const productId = Number(req.params.id);
-  const { price, originalPrice, onSale, stock } = req.body;
+  const { price, originalPrice, onSale, stock, weightGrams, fitImage } = req.body;
+  const images = cleanProductImages(req.body.images);
 
   if (Number.isNaN(productId)) {
     return res.status(400).json({ success: false, message: 'Invalid product ID.' });
@@ -1048,16 +1667,27 @@ app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
   if (typeof price !== 'number' || price < 0) {
     return res.status(400).json({ success: false, message: 'Price must be a non-negative number.' });
   }
+  if (onSale && (typeof originalPrice !== 'number' || originalPrice <= price)) {
+    return res.status(400).json({ success: false, message: 'A sale price must be lower than the original price.' });
+  }
   if (stock !== null && stock !== undefined && (!Number.isInteger(stock) || stock < 0)) {
     return res.status(400).json({ success: false, message: 'Stock must be a whole number of zero or more, or null when not tracked.' });
   }
+  if (weightGrams !== undefined && (!Number.isInteger(weightGrams) || weightGrams < 1)) {
+    return res.status(400).json({ success: false, message: 'Packed weight must be a whole number of grams greater than zero.' });
+  }
+  if (images === null || (fitImage !== undefined && (String(fitImage).length > 500 || /^(?:javascript|data):/i.test(String(fitImage).trim())))) {
+    return res.status(400).json({ success: false, message: 'Gallery images must be valid image paths (up to 8 extra images).' });
+  }
 
   try {
-    const product = await withLock(async () => {
+    const result = await withLock(async () => {
       const products = await loadProducts();
       const index = products.findIndex(p => p.id === productId);
       if (index === -1) return null;
 
+      const previouslyDiscounted = products[index].onSale
+        || Number(products[index].originalPrice) > Number(products[index].price);
       const savedOriginalPrice = typeof originalPrice === 'number' && originalPrice >= price
         ? originalPrice
         : price;
@@ -1066,15 +1696,34 @@ app.put('/api/admin/products/:id', verifyAdmin, async (req, res) => {
       products[index].price = products[index].onSale ? price : savedOriginalPrice;
       if (stock === null) delete products[index].stock;
       else if (stock !== undefined) products[index].stock = stock;
+      if (weightGrams !== undefined) products[index].weightGrams = weightGrams;
+      if (images !== undefined) {
+        if (images.length) products[index].images = images;
+        else delete products[index].images;
+      }
+      if (fitImage !== undefined) {
+        const cleanedFitImage = String(fitImage).trim();
+        if (cleanedFitImage) products[index].fitImage = cleanedFitImage;
+        else delete products[index].fitImage;
+      }
 
       await saveProducts(products);
-      return products[index];
+      return { product: products[index], announceSale: !previouslyDiscounted && Boolean(products[index].onSale) };
     });
 
-    if (!product) {
+    if (!result) {
       return res.status(404).json({ success: false, message: 'Product not found.' });
     }
-    return res.json({ success: true, product });
+    let newsletterNotification = null;
+    if (result.announceSale) {
+      try {
+        newsletterNotification = await notifyNewsletterSubscribers(result.product, 'sale', req);
+      } catch (error) {
+        console.error('Product updated, but newsletter notification failed:', error);
+        newsletterNotification = { sent: 0, failed: 0, error: 'Product updated, but notification emails could not be processed.' };
+      }
+    }
+    return res.json({ success: true, product: result.product, newsletterNotification });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to update product.' });

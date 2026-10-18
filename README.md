@@ -39,6 +39,7 @@ The React app will run in development mode and the Express server will run on po
 
 - The Express server is in `/server`
 - Product prices, discounts, and admin-managed stock counts are stored in `/data/products.json`. Stock starts untracked until an admin enters a count; checkout checks and decrements tracked stock, and cancelling an unshipped order restores it.
+- Newsletter signups are saved as `/data/newsletterSubscribers.json` (or in MongoDB when configured). Subscribers receive email alerts when an admin adds a product or first marks a product as discounted, and each alert includes an unsubscribe link. Products added from the admin page appear under New Arrivals for 30 days.
 - Orders are stored in `/data/orders.json` and are available to the authenticated admin dashboard.
 - Public product data is served by `GET /api/products`; orders are submitted through `POST /api/orders`. Customers can cancel orders that have not shipped through the order confirmation or tracking page.
 - Health check: `GET /api/health`
@@ -53,18 +54,32 @@ Netlify hosts the pages and runs the API as a function ([netlify/functions/api.j
 
 1. **Database:** create a free cluster at mongodb.com/atlas (M0). Under *Database Access* add a user with a password, and under *Network Access* allow `0.0.0.0/0`. Click *Connect → Drivers* and copy the connection string (replace `<password>`).
 2. **Site:** in Netlify choose **Add new site → Import an existing project**, pick this GitHub repo, leave the build command and publish directory as detected from `netlify.toml`.
-3. **Settings:** in *Site configuration → Environment variables* add `MONGODB_URI`, `ADMIN_PASSWORD`, `JWT_SECRET` (any long random text), and for emails `EMAIL_USER` / `EMAIL_PASS` (a Gmail address and its app password). Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`.
+3. **Settings:** in *Site configuration → Environment variables*, configure:
+   - Required for persistent data and admin access: `MONGODB_URI`, `ADMIN_PASSWORD`, `JWT_SECRET` (use a long random value).
+   - Required for customer emails: `EMAIL_USER` and `EMAIL_PASS` (your Gmail address and Google app password), plus `SITE_URL` (for example `https://pynxph.netlify.app`).
+   - Required before accepting orders: `SHIPPING_RATES_JSON`, containing your real J&T zones, fees, weight brackets, and delivery ranges (format below). Enter each product's packed weight in Admin → Products & Inventory.
+   - Required for GCash/card: `PAYMONGO_SECRET_KEY` and `PAYMONGO_WEBHOOK_SECRET`, after configuring the PayMongo webhook described below. Leave these unset to keep online payments disabled; cash on delivery remains available once shipping is configured.
+   - Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`, `JNT_TRACKING_URL_TEMPLATE`, and `SHIP_FROM`.
 4. Redeploy, then open `https://<your-site>.netlify.app/api/health`; it should return `{"status":"ok"}`.
 5. Open `/admin.html` on the Netlify site and log in.
 
 Netlify cannot keep files, so accounts, orders, reviews, messages, and product prices live in MongoDB. Products start from `data/products.json` until an admin edits one.
+
+#### Checkout, shipping and payment setup
+
+- **J&T rates:** `SHIPPING_RATES_JSON` is a JSON array of zones. Each zone needs `name`, `provinces` and/or `cities`, `rates` (weight brackets with `maxWeightGrams` and the actual J&T `fee` in PHP), and `deliveryMinDays` / `deliveryMaxDays`. The server picks the first bracket that covers the packed order weight. Do not use sample or zero fees: quotes and orders fail until a matching real zone and rate exist. Add each existing product's packed weight in grams in **Admin → Products & Inventory**; new products require a weight at creation. Ask J&T for current fees if its rate page is unavailable.
+- **PayMongo:** add `PAYMONGO_SECRET_KEY` and `PAYMONGO_WEBHOOK_SECRET` in Netlify. Register `https://pynxph.netlify.app/api/webhooks/paymongo` in PayMongo for `checkout_session.payment.paid`, then copy the webhook signing secret to `PAYMONGO_WEBHOOK_SECRET`. Use test keys and a test webhook during testing; switch to live credentials before accepting real payments. Never put secret keys in site JavaScript or commit them.
+- **J&T tracking:** optionally set `JNT_TRACKING_URL_TEMPLATE` to J&T's tracking-page URL with `{trackingNumber}` where the waybill number belongs. If unset, the J&T button opens its Philippines homepage.
+- **Site links:** `SITE_URL` is the public Netlify site URL used in email links. `PUBLIC_API_URL` is not needed when Netlify hosts both the site and API.
+
+Until real shipping rates and all packed product weights are configured, the API intentionally refuses checkout rather than guessing a shipping fee. Cash on delivery is available after shipping is configured; online payment options additionally require PayMongo credentials and webhook setup.
 
 ### Deploy on Render instead
 
 Alternatively use the included Render blueprint.
 
 1. Push this repository to GitHub. In Render choose **New → Blueprint** and select the repo; [render.yaml](render.yaml) creates the `pynx-api` service.
-2. When prompted, enter `ADMIN_PASSWORD`, `EMAIL_USER` / `EMAIL_PASS` (a Gmail address and its app password, used for order, review and message emails) and `MONGODB_URI` (for example a free MongoDB Atlas cluster, so accounts and orders survive redeploys).
+2. When prompted, enter `ADMIN_PASSWORD`, `EMAIL_USER` / `EMAIL_PASS` (a Gmail address and its app password, used for order, review, message, and product update emails) and `MONGODB_URI` (for example a free MongoDB Atlas cluster, so accounts and orders survive redeploys).
 3. Open `https://<your-service>.onrender.com/api/health`; it should return `{"status":"ok"}`.
 4. Because the site is then hosted elsewhere (for example GitHub Pages), copy that URL into `js/config.js`. Every page (storefront, checkout, login, signup, contact, admin) reads this one setting:
 
@@ -72,7 +87,7 @@ Alternatively use the included Render blueprint.
 window.PYNX_API_URL = 'https://your-service.onrender.com';
 ```
 
-The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, and discounts then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
+Set `PUBLIC_API_URL` on the server to that same Render URL so unsubscribe links in product emails return to the API. Set `SITE_URL` to the public storefront URL for email links. For checkout, also configure `SHIPPING_RATES_JSON`, product packed weights, and (for GCash/card) `PAYMONGO_SECRET_KEY` / `PAYMONGO_WEBHOOK_SECRET`. The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, discounts, and newsletter subscriptions then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
 
 Other settings: `JWT_SECRET`, `ADMIN_EMAIL`, `CORS_ORIGIN`, `NOTIFY_EMAIL` (comma-separated recipients) and `DATA_DIR`. Always set your own `ADMIN_EMAIL` / `ADMIN_PASSWORD` in production; never commit their values. Without `MONGODB_URI` the server writes JSON files to `DATA_DIR`, which is wiped on hosts with an ephemeral disk.
 
@@ -84,13 +99,16 @@ All `/api/admin/*` routes need `Authorization: Bearer <token>` from `POST /api/a
 | --- | --- |
 | `POST /api/admin/login` | Staff login, returns a 2-hour token |
 | `GET /api/admin/orders` | All orders, newest first |
-| `PATCH /api/admin/orders/:id/status` | Update order status; customers are emailed when orders are delivered or cancelled |
+| `POST /api/admin/orders/:id/tracking` | Post the next ordered J&T tracking step and location |
+| `PUT /api/admin/orders/:id/waybill` | Save a J&T waybill and email the tracking links |
+| `PATCH /api/admin/orders/:id/payment` | Mark delivered cash-on-delivery as paid |
 | `GET /api/admin/contacts` | Customer concerns |
 | `GET /api/admin/reviews` | Customer reviews |
 | `GET /api/admin/products` | Product catalog |
+| `POST /api/admin/products` | Add a product and email newsletter subscribers |
 | `PUT /api/admin/products/:id` | Update price, original price, sale flag, and stock count |
 
-Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `PATCH /api/orders/:id/cancel` (customer cancellation is available on the tracking page only and only before shipment), `GET /api/orders/track`, `POST /api/orders/track`, `POST /api/contact`, `POST /api/reviews`, `GET /api/products`, `GET /api/health`.
+Public routes: `POST /api/customers/signup`, `POST /api/customers/login`, `POST /api/orders`, `PATCH /api/orders/:id/cancel` (customer cancellation is available on the tracking page only and only before shipment), `GET /api/orders/track`, `POST /api/orders/track`, `POST /api/contact`, `POST /api/reviews`, `POST /api/newsletter/subscribe`, `GET/POST /api/newsletter/unsubscribe`, `GET /api/products`, `GET /api/health`.
 
 ## Static site fallback
 

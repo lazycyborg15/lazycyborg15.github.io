@@ -24,11 +24,11 @@
         .track-hero p strong { color: #0d9488; }
 
         /* Progress bar */
-        .track-progress { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; margin-top: 1.6rem; }
-        .track-progress::before, .track-progress .fill { content: ''; position: absolute; top: 15px; left: 12.5%; height: 6px; border-radius: 3px; transform: translateY(-50%); }
-        .track-progress::before { width: 75%; background: #e5e7eb; }
+        .track-progress { position: relative; display: grid; grid-template-columns: repeat(8, minmax(90px, 1fr)); text-align: center; margin-top: 1.6rem; overflow-x: auto; padding-bottom: .5rem; }
+        .track-progress::before, .track-progress .fill { content: ''; position: absolute; top: 15px; left: 6.25%; height: 6px; border-radius: 3px; transform: translateY(-50%); }
+        .track-progress::before { width: 87.5%; background: #e5e7eb; }
         .track-progress .fill { background: #99e0d8; }
-        .progress-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; font-size: .8rem; color: #9ca3af; line-height: 1.2; padding: 0 .2rem; }
+        .progress-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; font-size: .7rem; color: #9ca3af; line-height: 1.2; padding: 0 .2rem; }
         .progress-step .dot { width: 12px; height: 12px; border-radius: 50%; background: #d1d5db; margin: 9px 0; position: relative; z-index: 1; }
         .progress-step > span:last-child { margin-top: .35rem; }
         .progress-step.complete { color: #0d9488; }
@@ -53,6 +53,7 @@
         .track-item .price small { display: block; color: #6b7280; }
         .track-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .45rem 0; color: #4b5563; font-size: .92rem; }
         .track-row strong { color: #111; }
+        .track-waybill { color: #0d9488; font-weight: 700; }
         .copy-btn { background: none; border: 0; cursor: pointer; font-size: .8rem; color: #0d9488; font-weight: 700; padding: 0 0 0 .5rem; }
 
         /* Map */
@@ -124,7 +125,16 @@
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     const fmtDate = value => value ? new Date(value).toLocaleString() : '';
-    const STATUS_ORDER = ['processing', 'done', 'shipped', 'delivered'];
+    const TRACKING_LABELS = [
+        'Preparing to ship',
+        'Packaged for pickup',
+        'Package arrived at sorting center',
+        'Package left the sorting center',
+        'Package is being processed by the carrier',
+        'Package arrived at the nearest hub',
+        'Out for delivery',
+        'Delivered',
+    ];
 
     function fmtEstimate(estimate, withYear = false) {
         if (!estimate) return '';
@@ -229,7 +239,7 @@
     }
 
     function renderOrder(order) {
-        const level = Math.max(0, STATUS_ORDER.indexOf(order.status));
+        const level = Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1;
         const delivered = order.status === 'delivered';
         const cancelled = order.status === 'cancelled';
         const recipient = order.recipient || {};
@@ -243,7 +253,7 @@
                 <div class="price">₱${Number(item.price).toFixed(2)}<small>x${esc(item.qty)}</small></div>
             </div>`;
         }).join('');
-        const steps = PROGRESS_LABELS.map((label, index) => {
+        const steps = TRACKING_LABELS.map((label, index) => {
             const cls = index < level ? 'complete' : (index === level ? 'current complete' : '');
             return `<div class="progress-step ${cls}"><span class="dot">${index === level ? BOX_ICON : ''}</span><span>${label}</span></div>`;
         }).join('');
@@ -252,15 +262,19 @@
             : delivered
                 ? `Delivered on <strong>${esc(fmtDay(order.statusTimes?.delivered))}</strong>`
                 : `Arriving <strong>${esc(fmtEstimate(order.estimatedDelivery))}</strong>`;
+        const currentTitle = level >= 0 ? TRACKING_LABELS[level] : 'Order received';
+        const waybill = order.trackingNumber
+            ? `<div class="track-row"><span>J&amp;T tracking number</span><strong class="track-waybill">${esc(order.trackingNumber)} <a href="${esc(order.jntTrackingUrl || 'https://www.jtexpress.ph/')}" target="_blank" rel="noopener noreferrer">Track on J&amp;T</a></strong></div>`
+            : '';
 
         resultEl.innerHTML = `
             <section class="track-section track-hero">
-                <h1>${esc(STATUS_TITLES[order.status] || STATUS_TITLES.processing)}</h1>
-                <p>${arriving}</p>
-                ${cancelled ? '' : `<div class="track-progress">
-                    <span class="fill" style="width:${(level / 3) * 75}%"></span>
-                    ${steps}
-                </div>`}
+            <h1>${esc(cancelled ? STATUS_TITLES.cancelled : currentTitle)}</h1>
+            <p>${arriving}</p>
+            ${cancelled ? '' : `<div class="track-progress">
+                <span class="fill" style="width:${(Math.max(0, level) / 7) * 87.5}%"></span>
+                ${steps}
+            </div>`}
                 ${canCancelOrder(order) ? '<button type="button" class="btn-secondary track-cancel-order" id="track-cancel-order">Cancel this order</button>' : ''}
             </section>
             <section class="track-section track-map-card" id="track-map-card">
@@ -280,7 +294,10 @@
             <section class="track-section">
                 <div class="track-row"><span>Order number</span><strong>${esc(order.orderNumber)} <button type="button" class="copy-btn" id="copy-order">Copy</button></strong></div>
                 <div class="track-row"><span>Placed on</span><span>${esc(fmtDay(order.createdAt))}, ${esc(fmtClock(order.createdAt))}</span></div>
+                <div class="track-row"><span>Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>
                 <div class="track-row"><span>Total</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
+                <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
+                ${waybill}
             </section>
             <section class="track-section">
                 <h3>Track package</h3>
@@ -339,8 +356,22 @@
     });
 
     const orderId = new URLSearchParams(window.location.search).get('id');
-    if (orderId) loadById(orderId);
-    else formEl.style.display = 'grid';
+    const orderNumber = new URLSearchParams(window.location.search).get('orderNumber')
+        || decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+    if (orderId) {
+        loadById(orderId);
+    } else {
+        formEl.style.display = 'grid';
+        if (/^PYNX-[A-F0-9]{8}$/i.test(orderNumber)) {
+            document.getElementById('track-number').value = orderNumber;
+        }
+        const paymentState = new URLSearchParams(window.location.search).get('payment');
+        if (paymentState === 'success') {
+            errorEl.textContent = 'Payment completed. Enter your checkout email to view your order and tracking.';
+        } else if (paymentState === 'cancelled') {
+            errorEl.textContent = 'Payment was not completed. Your order was not paid; enter your email to check its status.';
+        }
+    }
 </script>
 </body>
 </html>

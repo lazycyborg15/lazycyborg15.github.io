@@ -73,9 +73,9 @@
             <h2 class="section-title">SHADOW &amp; LIGHT</h2>
         </div>
         <div class="about-values-grid">
-            <div class="about-value reveal"><span>01</span><h3>INTENTIONAL</h3><p>Nothing is added without purpose. Clean lines leave room for character.</p></div>
-            <div class="about-value reveal"><span>02</span><h3>CONFIDENT</h3><p>Our pieces are quiet in form and unmistakable in presence.</p></div>
-            <div class="about-value reveal"><span>03</span><h3>ENDURING</h3><p>We design beyond the trend, building essentials worth returning to.</p></div>
+            <div class="about-value reveal"><h3>INTENTIONAL</h3><p>Nothing is added without purpose. Clean lines leave room for character.</p></div>
+            <div class="about-value reveal"><h3>CONFIDENT</h3><p>Our pieces are quiet in form and unmistakable in presence.</p></div>
+            <div class="about-value reveal"><h3>ENDURING</h3><p>We design beyond the trend, building essentials worth returning to.</p></div>
         </div>
     </section>
 </main>
@@ -85,7 +85,7 @@
         <div class="footer-brand"><img class="footer-logo" src="logo/pynx-logo-white.png" alt="PYNX"><p>Premium headwear and swimwear for those who move with purpose. Designed to last. Built to stand out.</p></div>
         <div class="footer-col"><h4>Explore</h4><a href="shop.html">Shop</a><a href="caps.html">Caps</a><a href="bikini.html">Bikini</a></div>
         <div class="footer-col"><h4>Support</h4><a href="contact.html">Contact Us</a><a href="about.html">About PYNX</a></div>
-        <div class="footer-col"><h4>Stay Connected</h4><p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p><div class="social-icons">
+        <div class="footer-col"><h4>Stay Connected</h4><p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get email alerts for new arrivals and sale items. Unsubscribe anytime.</p><form class="nl-form" onsubmit="subscribeNewsletter(event)"><input type="email" id="nl-email" placeholder="Your email" aria-label="Your email address" autocomplete="email" maxlength="254" required><button type="submit" aria-label="Subscribe to email updates">→</button></form><div class="social-icons">
             <a href="https://www.instagram.com/pynx.ph?stkn=MWkxbDRiOG84djZkdQ==" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                 <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
                     <rect x="6" y="6" width="20" height="20" rx="6" stroke="white" stroke-width="2" fill="none"/>
@@ -146,6 +146,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="js/config.js"></script>
 <script src="js/script.js?v=20261013-policy"></script>
 <script>
     const revealItems = document.querySelectorAll('.reveal');

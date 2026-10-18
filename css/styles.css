@@ -987,7 +987,11 @@
             transform-origin: center center;
             transition: transform .4s var(--ease);
         }
-            .product-card:hover .product-photo { transform: scale(calc(var(--photo-zoom, 1) * 1.04)); }
+        .product-gallery-preview { position: absolute; inset: 0; }
+        .product-gallery-preview .product-photo { position: absolute; inset: 0; transition: opacity .35s ease, transform .4s var(--ease); }
+        .product-gallery-preview .product-photo-hover { opacity: 0; }
+        .product-card:hover .product-gallery-preview .product-photo { transform: scale(calc(var(--photo-zoom, 1) * 1.04)); }
+        .product-card:hover .product-gallery-preview .product-photo-hover { opacity: 1; }
         .product-card:hover .product-image .pi-inner {
             transform: scale(1.08);
             filter: grayscale(.6) opacity(.2);
@@ -1424,6 +1428,25 @@
             font-size: 1rem;
             letter-spacing: 0;
         }
+        .product-delivery-estimate { margin: 1rem 0; color: var(--mid); font-size: .82rem; }
+        .product-delivery-estimate > strong { color: var(--ink); text-transform: uppercase; letter-spacing: .1rem; }
+        .product-estimate-fields { display: flex; gap: .4rem; margin: .6rem 0; }
+        .product-estimate-fields input { min-width: 0; width: 38%; padding: .55rem; border: 1px solid var(--border); }
+        .product-estimate-fields button { padding: .55rem .8rem; color: var(--bg); background: var(--ink); }
+        #product-estimate-result { min-height: 1.2em; margin: .4rem 0; color: var(--ink); }
+        .modal-img .gallery-arrow { position: absolute; z-index: 1; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; background: rgba(17,17,17,.68); color: #fff; font-size: 1.7rem; line-height: 1; }
+        .modal-img .gallery-prev { left: .8rem; }
+        .modal-img .gallery-next { right: .8rem; }
+        .modal-img .gallery-count, .modal-img .gallery-label { position: absolute; z-index: 1; bottom: .8rem; padding: .35rem .6rem; border-radius: 3px; background: rgba(17,17,17,.75); color: #fff; font-size: .72rem; }
+        .modal-img .gallery-count { left: .8rem; }
+        .modal-img .gallery-label { right: .8rem; }
+        .modal-gallery-photo { animation: product-gallery-fade .25s ease; }
+        @keyframes product-gallery-fade { from { opacity: .2; } to { opacity: 1; } }
+        .checkout-payment { border: 1px solid var(--border); padding: 1rem; margin: 1.5rem 0; }
+        .checkout-payment legend { font-size: .65rem; letter-spacing: .2rem; color: var(--mid); }
+        .checkout-payment label { display: flex; gap: .6rem; align-items: center; padding: .5rem 0; }
+        .checkout-payment input { accent-color: var(--ink); }
+        .checkout-payment p { color: var(--mid); font-size: .78rem; margin: .5rem 0 0; }
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -2103,6 +2126,13 @@
             overflow: hidden;
             transition: all 0.2s ease;
         }
+        .order-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 320px); gap: .8rem; margin: 1rem 0; }
+        .order-filters input, .order-filters select { min-width: 0; padding: .8rem 1rem; border: 1px solid var(--border); background: #fff; font: inherit; }
+        .waybill-panel { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .waybill-panel input { min-width: 180px; padding: .55rem .7rem; border: 1px solid var(--border); }
+        .waybill-panel small { flex-basis: 100%; color: var(--mid); }
+        .order-tracking-btn, .order-payment-btn { padding: .6rem .8rem; background: var(--ink); color: var(--bg); font-size: .68rem; letter-spacing: .04rem; }
+        .order-payment-btn { background: #176f56; }
 
         .order-card:hover {
             box-shadow: 0 4px 20px rgba(17,17,17,.08);
@@ -3246,6 +3276,7 @@
 
         /* Improve tap targets on small screens */
         @media (max-width: 700px) {
+            .order-filters { grid-template-columns: 1fr; }
             .wishlist-header-btn, .cart-btn, .menu-toggle, .nl-form button {
                 width: 48px; height: 48px; padding: 0.2rem;
             }

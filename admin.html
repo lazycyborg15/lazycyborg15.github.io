@@ -89,6 +89,23 @@
                     </div>
 
                     <div class="auth-note admin-status" id="admin-status">Loading orders...</div>
+                    <div class="order-filters">
+                        <input type="search" id="order-search" placeholder="Search order number, customer, address, or waybill" aria-label="Search orders">
+                        <select id="order-status-filter" aria-label="Filter orders">
+                            <option value="all">All orders</option>
+                            <option value="untracked">Awaiting first tracking update</option>
+                            <option value="payment-pending">Payment pending</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="preparing_to_ship">Preparing to ship</option>
+                            <option value="packaged_for_pickup">Packaged for pickup</option>
+                            <option value="arrived_at_sorting_center">Arrived at sorting center</option>
+                            <option value="left_sorting_center">Left sorting center</option>
+                            <option value="carrier_processing">Being processed by carrier</option>
+                            <option value="arrived_at_nearest_hub">Arrived at nearest hub</option>
+                            <option value="out_for_delivery">Out for delivery</option>
+                            <option value="delivered">Delivered</option>
+                        </select>
+                    </div>
                     <div class="orders-list-container" id="orders-list"></div>
                 </div>
 
@@ -144,6 +161,49 @@
                             <p class="card-note" id="inventory-note">Available stock across tracked products.</p>
                         </div>
                     </div>
+                    <div class="product-card admin-product-card">
+                        <div class="product-card-body">
+                            <h3>Add New Product</h3>
+                            <div class="product-edit-row">
+                                <label for="new-product-name">Product name</label>
+                                <input type="text" id="new-product-name" maxlength="200" required>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-type">Category</label>
+                                <select id="new-product-type">
+                                    <option value="cap">Headwear</option>
+                                    <option value="bikini">Swimwear</option>
+                                </select>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-price">Price (PHP)</label>
+                                <input type="number" id="new-product-price" min="0" step="0.01" required>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-weight">Packed weight (grams)</label>
+                                <input type="number" id="new-product-weight" min="1" step="1" required>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-image">Image path</label>
+                                <input type="text" id="new-product-image" placeholder="assets/caps/product.png" maxlength="500" required>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-description">Description</label>
+                                <textarea id="new-product-description" rows="3" maxlength="2000"></textarea>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-images">Additional gallery image paths (one per line)</label>
+                                <textarea id="new-product-images" rows="3" maxlength="2000"></textarea>
+                            </div>
+                            <div class="product-edit-row">
+                                <label for="new-product-fit-image">On-model fit image path</label>
+                                <input type="text" id="new-product-fit-image" maxlength="500">
+                            </div>
+                            <div class="product-edit-actions">
+                                <button class="btn-primary" type="button" onclick="addProduct()">Add Product &amp; Notify Subscribers</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="auth-note admin-status" id="products-status">Loading products...</div>
                     <div class="products-list-container" id="products-list"></div>
                 </div>
@@ -161,6 +221,8 @@
     const orderCount = document.getElementById('order-count');
     const lastRefresh = document.getElementById('last-refresh');
     const ordersList = document.getElementById('orders-list');
+    const orderSearch = document.getElementById('order-search');
+    const orderStatusFilter = document.getElementById('order-status-filter');
     const adminLoginForm = document.getElementById('admin-login-form');
     const adminLogout = document.getElementById('admin-logout');
     const ordersSection = document.getElementById('orders-section');
@@ -312,11 +374,16 @@
             
             ordersList.innerHTML = data.orders.map((order, index) => {
                 const itemsArr = (order.items || []);
-                const total = orderTotals[index] || 0;  // Use pre-calculated totals for consistency
+                const total = Number.isFinite(Number(order.total)) ? Number(order.total) : orderTotals[index] || 0;
                 const createdDate = new Date(order.createdAt).toLocaleString();
                 const status = ['processing', 'done', 'shipped', 'delivered', 'cancelled'].includes(order.status) ? order.status : 'processing';
                 const isDone = status !== 'processing' && status !== 'cancelled';
                 const orderRef = 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+                const stepKeys = ['preparing_to_ship', 'packaged_for_pickup', 'arrived_at_sorting_center', 'left_sorting_center', 'carrier_processing', 'arrived_at_nearest_hub', 'out_for_delivery', 'delivered'];
+                const trackingStep = Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1;
+                const stepKey = status === 'cancelled' ? 'cancelled' : trackingStep >= 0 ? stepKeys[trackingStep] : 'untracked';
+                const searchable = `${orderRef} ${order.firstName} ${order.lastName} ${order.email} ${order.address} ${order.trackingNumber || ''}`.toLowerCase();
+                const paymentStatus = order.paymentStatus || 'pending';
                 const itemsHtml = itemsArr.length ? `<ul class="order-items">${itemsArr.map(item => {
                     const name = esc(item.product?.name || 'Item');
                     const price = (Number(item.product?.price) || 0).toFixed(2);
@@ -325,11 +392,11 @@
                     const img = item.product?.image ? `<img class="item-thumb" src="${esc(item.product.image)}" alt="${name}">` : '';
                     return `<li class="item-chip">${img}<span class="item-label">${name}${size}</span><span class="item-badge">x${qty}</span><span class="item-price">₱${price}</span></li>`;
                 }).join('')}</ul>` : '<span class="empty-state">No items</span>';
-                return `<div class="order-card${isDone ? ' order-done' : ''}${status === 'cancelled' ? ' order-cancelled' : ''}">
+                return `<div class="order-card${isDone ? ' order-done' : ''}${status === 'cancelled' ? ' order-cancelled' : ''}" data-search="${esc(searchable)}" data-step="${stepKey}" data-payment="${paymentStatus}">
                     <div class="order-card-header">
-                        <span class="order-number">Order #${index+1} <small class="order-ref">${esc(orderRef)}</small></span>
+                        <span class="order-number">${esc(orderRef)} <small class="order-ref">${new Date(order.createdAt).toLocaleDateString()}</small></span>
                         <div class="order-header-actions">
-                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${statusLabels[status]}</span>
+                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${trackingStep >= 0 ? esc(['Preparing to ship', 'Packaged for pickup', 'Arrived at sorting center', 'Left sorting center', 'Carrier processing', 'Arrived at nearest hub', 'Out for delivery', 'Delivered'][trackingStep]) : statusLabels[status]}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
                             ${orderActions(order, status)}
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
@@ -367,6 +434,14 @@
                                 <span class="order-total-value">₱${total.toFixed(2)}</span>
                             </div>
                             <div class="order-info-row">
+                                <label>Shipping:</label>
+                                <span>₱${Number(order.shippingFee || 0).toFixed(2)} · ${esc(order.shippingZone || 'Zone unavailable')} · ${Number(order.totalWeightGrams || 0)} g</span>
+                            </div>
+                            <div class="order-info-row">
+                                <label>Payment:</label>
+                                <span>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'card' ? 'Card' : 'Not recorded')} · ${esc(paymentStatus)}</span>
+                            </div>
+                            <div class="order-info-row">
                                 <label>Created:</label>
                                 <span>${createdDate}</span>
                             </div>
@@ -378,6 +453,10 @@
                                 <label>Delivery pin:</label>
                                 <span>${mapLinkHtml(order)}</span>
                             </div>
+                            <div class="order-info-row">
+                                <label>J&amp;T waybill:</label>
+                                <span class="waybill-panel"><input type="text" id="waybill-${esc(order.id)}" value="${esc(order.trackingNumber || '')}" maxlength="40" placeholder="Enter J&amp;T tracking number"><button type="button" class="btn-secondary" data-waybill-id="${esc(order.id)}">Save &amp; email</button>${order.waybillEmail ? `<small>${order.waybillEmail.sent ? 'Email sent' : 'Email not sent'}${order.waybillEmail.error ? `: ${esc(order.waybillEmail.error)}` : ''}</small>` : ''}</span>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -385,6 +464,7 @@
             if (data.orders.length === 0) {
                 ordersList.innerHTML = '<div class="empty-state-card">No orders available yet.</div>';
             }
+            applyOrderFilters();
             showDashboard();
         } catch (error) {
             console.error(error);
@@ -481,19 +561,30 @@
         }
     }
 
-    // Buttons for the next step, plus Undo to go one step back.
+    const ADMIN_TRACKING_STEPS = [
+        'Preparing to ship',
+        'Packaged for pickup',
+        'Package arrived at sorting center',
+        'Package left the sorting center',
+        'Package is being processed by the carrier',
+        'Package arrived at the nearest hub',
+        'Out for delivery',
+        'Delivered'
+    ];
+
     function orderActions(order, status) {
-        const button = (label, next, extra = '', cls = '') =>
-            `<button type="button" class="order-done-btn${cls}" data-order-id="${esc(order.id)}" data-status="${next}" ${extra}>${label}</button>`;
-        const actions = {
-            processing: button('Mark as Done', 'done') + button('Cancel order', 'cancelled', '', ' cancel'),
-            done: button('Mark as Shipped', 'shipped', 'data-ask-location="1"') + button('Undo', 'processing', '', ' undo') + button('Cancel order', 'cancelled', '', ' cancel'),
-            shipped: button('Update location', 'shipped', 'data-ask-location="1" data-require-location="1"', ' undo')
-                + button('Mark as Delivered', 'delivered') + button('Undo', 'done', '', ' undo'),
-            delivered: button('Undo', 'shipped', '', ' undo'),
-            cancelled: '',
-        };
-        return actions[status] || '';
+        const stepIndex = Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1;
+        const nextStep = stepIndex + 1;
+        const nextButton = nextStep < ADMIN_TRACKING_STEPS.length && status !== 'cancelled'
+            ? `<button type="button" class="order-tracking-btn" data-order-id="${esc(order.id)}" data-step-index="${nextStep}">Post: ${esc(ADMIN_TRACKING_STEPS[nextStep])}</button>`
+            : '';
+        const cancelButton = ['processing', 'done'].includes(status)
+            ? `<button type="button" class="order-done-btn cancel" data-order-id="${esc(order.id)}" data-status="cancelled">Cancel order</button>`
+            : '';
+        const paidButton = order.paymentMethod === 'cash_on_hand' && status === 'delivered' && order.paymentStatus !== 'paid'
+            ? `<button type="button" class="order-payment-btn" data-order-id="${esc(order.id)}">Mark cash received</button>`
+            : '';
+        return `${nextButton}${paidButton}${cancelButton}`;
     }
 
     async function setOrderStatus(orderId, status, button) {
@@ -505,6 +596,7 @@
 
         if (status === 'cancelled' && !confirm('Cancel this order? The customer will see the cancelled status on the tracking page.')) return;
 
+        if (status !== 'cancelled') return;
         const payload = { status };
         if (button.dataset.askLocation) {
             const answer = prompt('Where is the package now? (for example: Butuan City, Agusan del Norte)\nThe customer will see it on the tracking map. Leave blank to skip.');
@@ -537,6 +629,93 @@
         }
     }
 
+    async function postTrackingStep(orderId, stepIndex, button) {
+        const location = prompt(`Enter the location for “${ADMIN_TRACKING_STEPS[stepIndex]}”.`);
+        if (location === null) return;
+        if (!location.trim()) {
+            alert('A location is required for every tracking update.');
+            return;
+        }
+        const token = getToken();
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stepIndex, location: location.trim() })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to save tracking update.');
+            await fetchOrders();
+            adminStatus.textContent = data.locationFound
+                ? 'Tracking step saved; the map pin has been updated.'
+                : 'Tracking step saved. The text location is visible, but it could not be placed on the map.';
+            adminStatus.classList.toggle('error', !data.locationFound);
+        } catch (error) {
+            adminStatus.textContent = error.message || 'Unable to save tracking update.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
+    async function saveWaybill(orderId, button) {
+        const trackingNumber = document.getElementById(`waybill-${orderId}`).value.trim();
+        const token = getToken();
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/waybill`), {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackingNumber })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to save J&T tracking number.');
+            adminStatus.textContent = data.emailSent
+                ? `J&T tracking number saved; email sent to ${data.order.email}.`
+                : `J&T tracking number saved, but email failed: ${data.emailError || 'email is not configured.'}`;
+            adminStatus.classList.toggle('error', !data.emailSent);
+            await fetchOrders();
+        } catch (error) {
+            adminStatus.textContent = error.message || 'Unable to save J&T tracking number.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
+    async function markCashPaid(orderId, button) {
+        const token = getToken();
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/payment`), {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to update payment status.');
+            await fetchOrders();
+            adminStatus.textContent = 'Cash-on-delivery payment marked paid.';
+            adminStatus.classList.remove('error');
+        } catch (error) {
+            adminStatus.textContent = error.message || 'Unable to update payment status.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
+    }
+
+    function applyOrderFilters() {
+        const search = orderSearch.value.trim().toLowerCase();
+        const status = orderStatusFilter.value;
+        ordersList.querySelectorAll('.order-card').forEach(card => {
+            const searchMatches = !search || card.dataset.search.includes(search);
+            const statusMatches = status === 'all'
+                || (status === 'payment-pending' ? card.dataset.payment !== 'paid' : card.dataset.step === status);
+            card.style.display = searchMatches && statusMatches ? '' : 'none';
+        });
+    }
+
+    orderSearch.addEventListener('input', applyOrderFilters);
+    orderStatusFilter.addEventListener('change', applyOrderFilters);
+
     ordersList.addEventListener('click', event => {
         const resendButton = event.target.closest('[data-resend-id]');
         if (resendButton) {
@@ -546,6 +725,21 @@
         const doneButton = event.target.closest('.order-done-btn');
         if (doneButton) {
             setOrderStatus(doneButton.dataset.orderId, doneButton.dataset.status, doneButton);
+            return;
+        }
+        const trackingButton = event.target.closest('.order-tracking-btn');
+        if (trackingButton) {
+            postTrackingStep(trackingButton.dataset.orderId, Number(trackingButton.dataset.stepIndex), trackingButton);
+            return;
+        }
+        const waybillButton = event.target.closest('[data-waybill-id]');
+        if (waybillButton) {
+            saveWaybill(waybillButton.dataset.waybillId, waybillButton);
+            return;
+        }
+        const paymentButton = event.target.closest('.order-payment-btn');
+        if (paymentButton) {
+            markCashPaid(paymentButton.dataset.orderId, paymentButton);
             return;
         }
         const button = event.target.closest('.order-remove-btn');
@@ -814,6 +1008,18 @@
                         <input type="number" min="0" step="1" value="${Number.isInteger(product.stock) ? product.stock : ''}" placeholder="Not set" id="product-stock-${product.id}">
                     </div>
                     <div class="product-edit-row">
+                        <label>Packed weight (grams)</label>
+                        <input type="number" min="1" step="1" value="${Number.isInteger(product.weightGrams) ? product.weightGrams : ''}" placeholder="Required for shipping" id="product-weight-${product.id}">
+                    </div>
+                    <div class="product-edit-row">
+                        <label>Extra gallery image paths</label>
+                        <textarea rows="2" id="product-images-${product.id}">${esc((product.images || []).join('\n'))}</textarea>
+                    </div>
+                    <div class="product-edit-row">
+                        <label>On-model fit image path</label>
+                        <input type="text" value="${esc(product.fitImage || '')}" id="product-fit-image-${product.id}">
+                    </div>
+                    <div class="product-edit-row">
                         <label>On Sale</label>
                         <input type="checkbox" id="product-onsale-${product.id}" ${product.onSale ? 'checked' : ''}>
                     </div>
@@ -862,6 +1068,9 @@
         const originalPrice = Number(document.getElementById(`product-original-${productId}`).value);
         const stockInput = document.getElementById(`product-stock-${productId}`).value;
         const stock = stockInput === '' ? null : Number(stockInput);
+        const weightGrams = Number(document.getElementById(`product-weight-${productId}`).value);
+        const images = document.getElementById(`product-images-${productId}`).value.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean);
+        const fitImage = document.getElementById(`product-fit-image-${productId}`).value.trim();
         const onSale = document.getElementById(`product-onsale-${productId}`).checked;
         const token = getToken();
 
@@ -874,6 +1083,11 @@
             productsStatus.classList.add('error');
             return;
         }
+        if (!Number.isInteger(weightGrams) || weightGrams < 1) {
+            productsStatus.textContent = 'Packed weight must be a whole number of grams greater than zero.';
+            productsStatus.classList.add('error');
+            return;
+        }
 
         try {
             const response = await fetch(getApiUrl(`/api/admin/products/${productId}`), {
@@ -882,15 +1096,82 @@
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ price, originalPrice, onSale, stock })
+                body: JSON.stringify({ price, originalPrice, onSale, stock, weightGrams, images, fitImage })
             });
             const data = await parseResponse(response);
             if (!response.ok || !data.success) {
                 throw new Error(data.message || 'Unable to save product.');
             }
-            productsStatus.textContent = `Saved ${data.product.name}.`;
+            await fetchProducts();
+            const notification = data.newsletterNotification;
+            productsStatus.textContent = notification?.error
+                ? `Saved ${data.product.name}, but subscriber emails failed: ${notification.error}`
+                : notification?.sent
+                    ? `Saved ${data.product.name}; notified ${notification.sent} subscriber(s).`
+                    : `Saved ${data.product.name}.`;
+            productsStatus.classList.toggle('error', Boolean(notification?.error));
+        } catch (error) {
+            productsStatus.textContent = error.message;
+            productsStatus.classList.add('error');
+        }
+    }
+
+    async function addProduct() {
+        const name = document.getElementById('new-product-name').value.trim();
+        const type = document.getElementById('new-product-type').value;
+        const price = Number(document.getElementById('new-product-price').value);
+        const weightGrams = Number(document.getElementById('new-product-weight').value);
+        const image = document.getElementById('new-product-image').value.trim();
+        const desc = document.getElementById('new-product-description').value.trim();
+        const images = document.getElementById('new-product-images').value.split(/\r?\n|,/).map(value => value.trim()).filter(Boolean);
+        const fitImage = document.getElementById('new-product-fit-image').value.trim();
+        const token = getToken();
+
+        if (!token) {
+            showLogin();
+            return;
+        }
+        if (!name || !Number.isFinite(price) || price < 0 || !image || !Number.isInteger(weightGrams) || weightGrams < 1) {
+            productsStatus.textContent = 'Enter a product name, valid price and image path, and packed weight in grams.';
+            productsStatus.classList.add('error');
+            return;
+        }
+
+        try {
+            productsStatus.textContent = 'Adding product and notifying subscribers...';
             productsStatus.classList.remove('error');
-            fetchProducts();
+            const response = await fetch(getApiUrl('/api/admin/products'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, type, price, weightGrams, image, desc, images, fitImage })
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to add product.');
+            }
+
+            await fetchProducts();
+            const notification = data.newsletterNotification;
+            if (notification?.error) {
+                productsStatus.textContent = `Added ${data.product.name}, but subscriber emails failed: ${notification.error}`;
+                productsStatus.classList.add('error');
+            } else if (notification?.sent) {
+                productsStatus.textContent = `Added ${data.product.name}; notified ${notification.sent} subscriber(s).`;
+                productsStatus.classList.remove('error');
+            } else {
+                productsStatus.textContent = `Added ${data.product.name}; there are no subscribers to notify yet.`;
+                productsStatus.classList.remove('error');
+            }
+            document.getElementById('new-product-name').value = '';
+            document.getElementById('new-product-price').value = '';
+            document.getElementById('new-product-weight').value = '';
+            document.getElementById('new-product-image').value = '';
+            document.getElementById('new-product-description').value = '';
+            document.getElementById('new-product-images').value = '';
+            document.getElementById('new-product-fit-image').value = '';
         } catch (error) {
             productsStatus.textContent = error.message;
             productsStatus.classList.add('error');
@@ -923,9 +1204,14 @@
             if (!response.ok || !data.success) {
                 throw new Error(data.message || 'Unable to update product.');
             }
-            productsStatus.textContent = `Updated ${data.product.name}.`;
-            productsStatus.classList.remove('error');
-            fetchProducts();
+            await fetchProducts();
+            const notification = data.newsletterNotification;
+            productsStatus.textContent = notification?.error
+                ? `Updated ${data.product.name}, but subscriber emails failed: ${notification.error}`
+                : notification?.sent
+                    ? `Updated ${data.product.name}; notified ${notification.sent} subscriber(s).`
+                    : `Updated ${data.product.name}.`;
+            productsStatus.classList.toggle('error', Boolean(notification?.error));
         } catch (err) {
             productsStatus.textContent = err.message || 'Unable to update product.';
             productsStatus.classList.add('error');

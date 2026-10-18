@@ -60,8 +60,18 @@
                     <p class="checkout-empty">Your bag is empty.</p>
                 </div>
                 <div class="checkout-summary-total">
-                    <span>Subtotal</span>
+                    <span>Items subtotal</span>
                     <strong id="checkout-subtotal">₱0.00</strong>
+                </div>
+                <div class="checkout-summary-total">
+                    <span>J&amp;T shipping</span>
+                    <strong id="checkout-shipping-fee">Enter your delivery address</strong>
+                </div>
+                <p class="checkout-map-hint" id="checkout-shipping-note" role="status">Shipping and delivery estimate are calculated from your province, city, and packed item weights.</p>
+                <p class="checkout-map-hint" id="checkout-delivery-estimate" style="display:none;"></p>
+                <div class="checkout-summary-total">
+                    <span>Total</span>
+                    <strong id="checkout-total">₱0.00</strong>
                 </div>
             </aside>
             <form id="checkout-form" class="checkout-form">
@@ -116,7 +126,14 @@
                     <label for="checkout-email">EMAIL ADDRESS:</label>
                     <input type="email" id="checkout-email" placeholder="Email Address" required>
                 </div>
-                <button class="btn-primary form-submit" type="submit">Submit Order</button>
+                <fieldset class="checkout-payment">
+                    <legend>PAYMENT METHOD:</legend>
+                    <label><input type="radio" name="payment-method" value="gcash" required> GCash</label>
+                    <label><input type="radio" name="payment-method" value="card" required> Card</label>
+                    <label><input type="radio" name="payment-method" value="cash_on_hand" required> Cash on delivery</label>
+                    <p id="checkout-payment-note">GCash and card payments are completed securely on PayMongo. Cash is paid when your order is delivered.</p>
+                </fieldset>
+                <button class="btn-primary form-submit" id="checkout-submit" type="submit">Continue to payment</button>
             </form>
             <div class="form-success checkout-success" id="checkout-success" style="display:none;">
                 <div class="check">✓</div>
@@ -416,6 +433,7 @@
             if (!cartItems.length) {
                 itemsEl.innerHTML = '<p class="checkout-empty">Your bag is empty.</p>';
                 subtotalEl.textContent = '₱0.00';
+                document.getElementById('checkout-total').textContent = '₱0.00';
                 return;
             }
 
@@ -444,15 +462,96 @@
             }).join('');
 
             subtotalEl.textContent = `₱${subtotal.toFixed(2)}`;
+            document.getElementById('checkout-total').textContent = `₱${(subtotal + (activeShippingQuote?.shippingFee || 0)).toFixed(2)}`;
         }
 
         document.addEventListener('DOMContentLoaded', renderCheckoutSummary);
 
+        let activeShippingQuote = null;
+        let shippingQuoteTimer = null;
+
+        function formatEstimateRange(estimate) {
+            if (!estimate?.from || !estimate?.to) return '';
+            const format = (value, year) => {
+                const [y, m, d] = value.split('-').map(Number);
+                return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
+            };
+            return estimate.from === estimate.to ? format(estimate.to, true) : `${format(estimate.from)}–${format(estimate.to, true)}`;
+        }
+
+        async function refreshShippingQuote() {
+            const parts = addressParts();
+            const cartItems = getCheckoutItems();
+            const fee = document.getElementById('checkout-shipping-fee');
+            const note = document.getElementById('checkout-shipping-note');
+            const eta = document.getElementById('checkout-delivery-estimate');
+            const apiItems = cartItems.map(item => ({ product: { id: item.product?.id }, qty: Number(item.qty) }));
+            activeShippingQuote = null;
+            eta.style.display = 'none';
+
+            if (!parts.province || !parts.city || !apiItems.length) {
+                fee.textContent = 'Enter your delivery address';
+                note.textContent = 'Shipping and delivery estimate are calculated from your province, city, and packed item weights.';
+                const subtotal = Number(document.getElementById('checkout-subtotal').textContent.replace(/[^\d.]/g, '')) || 0;
+                document.getElementById('checkout-total').textContent = `₱${subtotal.toFixed(2)}`;
+                return null;
+            }
+
+            fee.textContent = 'Calculating...';
+            note.textContent = 'Checking the delivery zone and package weight.';
+            try {
+                const response = await fetch(getApiUrl('/api/shipping/quote'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ addressParts: parts, items: apiItems }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Unable to calculate delivery.');
+                activeShippingQuote = data;
+                fee.textContent = `₱${Number(data.shippingFee).toFixed(2)}`;
+                note.textContent = `${data.zone} · ${data.totalWeightGrams} g packed weight`;
+                eta.textContent = `Estimated delivery: ${formatEstimateRange(data.estimatedDelivery)}`;
+                eta.style.display = '';
+                document.getElementById('checkout-total').textContent = `₱${Number(data.total).toFixed(2)}`;
+                return data;
+            } catch (error) {
+                fee.textContent = 'Unavailable';
+                note.textContent = error.message || 'Shipping could not be calculated.';
+                document.getElementById('checkout-total').textContent = '—';
+                return null;
+            }
+        }
+
+        const addressFieldIds = ['checkout-region', 'checkout-province', 'checkout-city', 'checkout-barangay', 'checkout-postal', 'checkout-street'];
+
+        addressFieldIds.forEach(id => document.getElementById(id).addEventListener('input', () => {
+            clearTimeout(shippingQuoteTimer);
+            shippingQuoteTimer = setTimeout(refreshShippingQuote, 500);
+        }));
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(getApiUrl('/api/checkout/config'), { cache: 'no-store' });
+                const config = await response.json();
+                if (!response.ok || !config.success) throw new Error(config.message || 'Checkout configuration is unavailable.');
+                if (!config.onlinePaymentsEnabled) {
+                    document.querySelectorAll('input[name="payment-method"][value="gcash"], input[name="payment-method"][value="card"]').forEach(input => {
+                        input.disabled = true;
+                        input.closest('label').classList.add('payment-unavailable');
+                    });
+                    document.getElementById('checkout-payment-note').textContent = 'GCash and card will be available when PayMongo is configured. Cash on delivery is available now.';
+                }
+                if (!config.shippingConfigured) {
+                    document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';
+                }
+            } catch (error) {
+                console.error('Checkout configuration could not be loaded:', error);
+            }
+        });
+
         // ── Delivery pin ──
         // The pin follows the typed address using free OpenStreetMap search, and can be adjusted by hand.
         const deliveryPin = { map: null, marker: null, point: null, timer: null, requestId: 0 };
-        const addressFieldIds = ['checkout-region', 'checkout-province', 'checkout-city', 'checkout-barangay', 'checkout-postal', 'checkout-street'];
-
         function addressParts() {
             const value = id => document.getElementById(id).value.trim();
             return {
@@ -595,6 +694,7 @@
             const address = formatAddress(parts);
             const email = document.getElementById('checkout-email').value.trim();
             const contact = document.getElementById('checkout-contact').value.trim();
+            const paymentMethod = document.querySelector('input[name="payment-method"]:checked')?.value;
             const cartItems = getCheckoutItems();
             if (cartItems.length === 0) {
                 alert('Your bag is empty. Add an item before placing an order.');
@@ -608,6 +708,8 @@
                     originalPrice: item.product?.originalPrice || item.product?.price,
                     onSale: Boolean(item.product?.onSale),
                     image: item.product?.image || '',
+                    images: Array.isArray(item.product?.images) ? item.product.images : [],
+                    fitImage: item.product?.fitImage || '',
                     imageScale: item.product?.imageScale || 1,
                     bg: item.product?.bg || '#f0f0eb',
                     emoji: item.product?.emoji || '',
@@ -620,19 +722,24 @@
                 alert('Please complete all fields.');
                 return;
             }
-            if (!email.includes('@')) {
-                alert('Please enter a valid email address.');
+            if (!paymentMethod) {
+                alert('Choose a payment method.');
+                return;
+            }
+            activeShippingQuote = await refreshShippingQuote();
+            if (!activeShippingQuote) {
+                alert(document.getElementById('checkout-shipping-note').textContent || 'Shipping is unavailable for this address.');
                 return;
             }
             checkoutSubmitting = true;
             const submitButton = this.querySelector('[type="submit"]');
             submitButton.disabled = true;
-            submitButton.textContent = 'Submitting...';
+            submitButton.textContent = paymentMethod === 'cash_on_hand' ? 'Placing order...' : 'Opening PayMongo...';
             try {
                 const response = await fetch(getApiUrl('/api/orders'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ firstName, lastName, address, addressParts: parts, location: deliveryPin.point, email, contact, items }),
+                    body: JSON.stringify({ firstName, lastName, address, addressParts: parts, location: deliveryPin.point, email, contact, items, paymentMethod }),
                 });
 
                 let result = null;
@@ -650,6 +757,12 @@
                     throw new Error(message);
                 }
 
+                if (result.checkoutUrl) {
+                    if (typeof removePurchasedCartItems === 'function') removePurchasedCartItems(cartItems);
+                    window.location.assign(result.checkoutUrl);
+                    return;
+                }
+
                 if (typeof removePurchasedCartItems === 'function') {
                     removePurchasedCartItems(cartItems);
                 } else {
@@ -659,15 +772,15 @@
                 if (checkoutLayout) checkoutLayout.style.minHeight = `${checkoutLayout.scrollHeight}px`;
                 document.getElementById('checkout-form').style.display = 'none';
                 document.getElementById('checkout-email-note').textContent = result.receiptEmailConfigured
-                    ? 'Thanks for your order. Your order is confirmed. We are processing your receipt email; you can track your order below.'
-                    : 'Thanks for your order. Your order is confirmed. Email receipts are unavailable right now, so please save your order number and use the tracking link below.';
-                if (result.order?.estimatedDeliveryFrom && result.order?.estimatedDeliveryTo) {
+                    ? 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives; you can track your order below.'
+                    : 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives. Email receipts are unavailable, so save your order number and tracking link.';
+                if (result.order?.estimatedDelivery?.from && result.order?.estimatedDelivery?.to) {
                     const day = (iso, withYear) => {
                         const [y, m, d] = iso.split('-').map(Number);
                         return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: withYear ? 'numeric' : undefined });
                     };
                     const eta = document.getElementById('checkout-eta');
-                    eta.textContent = `Estimated delivery: ${day(result.order.estimatedDeliveryFrom)} – ${day(result.order.estimatedDeliveryTo, true)}`;
+                    eta.textContent = `Estimated delivery: ${day(result.order.estimatedDelivery.from)} – ${day(result.order.estimatedDelivery.to, true)}`;
                     eta.style.display = '';
                 }
                 if (result.order?.orderNumber) {
@@ -677,7 +790,7 @@
                 }
                 if (result.order?.id) {
                     const trackLink = document.getElementById('checkout-track-link');
-                    trackLink.href = `track.html?id=${encodeURIComponent(result.order.id)}`;
+                    trackLink.href = result.trackingPath || `/track/${encodeURIComponent(result.order.orderNumber)}`;
                     trackLink.style.display = 'inline-block';
                 }
                 document.getElementById('checkout-success').style.display = 'block';
@@ -685,7 +798,7 @@
                 console.error('Checkout submission error:', error);
                 checkoutSubmitting = false;
                 submitButton.disabled = false;
-                submitButton.textContent = 'Submit Order';
+                submitButton.textContent = 'Continue to payment';
                 if (error instanceof TypeError || error.name === 'AbortError' || /Unexpected response/.test(error?.message || '')) {
                     alert('We could not reach the store server, so your order was not placed. Please try again in a moment.');
                     return;
@@ -713,11 +826,11 @@
             </div>
             <div class="footer-col">
                 <h4>Stay Connected</h4>
-                <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p>
-                <div class="nl-form">
-                    <input type="email" id="nl-email" placeholder="Your email">
-                    <button onclick="subscribeNewsletter()">→</button>
-                </div>
+                <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get email alerts for new arrivals and sale items. Unsubscribe anytime.</p>
+                <form class="nl-form" onsubmit="subscribeNewsletter(event)">
+                    <input type="email" id="nl-email" placeholder="Your email" aria-label="Your email address" autocomplete="email" maxlength="254" required>
+                    <button type="submit" aria-label="Subscribe to email updates">→</button>
+                </form>
                 <div class="social-icons">
                     <a href="https://www.instagram.com/pynx.ph?stkn=MWkxbDRiOG84djZkdQ==" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                         <svg width="24" height="24" viewBox="0 0 32 32" fill="none">

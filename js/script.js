@@ -26,6 +26,8 @@ let wishlist = [];      // product ids
 let currentProduct = null;
 let selectedSize    = null;
 let editingCartKey  = null;
+let modalGallery = [];
+let modalGalleryIndex = 0;
 let selectedCartKeys = new Set();
 let selectedWishlistIds = new Set();
 
@@ -190,6 +192,19 @@ function thumbStyle(p) {
     return p.image ? ` style="background:${p.bg || '#f0f0eb'}22;"` : '';
 }
 
+function productGallery(product) {
+    const sources = [product.image, ...(Array.isArray(product.images) ? product.images : []), product.fitImage]
+        .filter((source, index, all) => typeof source === 'string' && source.trim() && all.indexOf(source) === index);
+    return sources.map((src, index) => ({
+        src,
+        label: product.fitImage === src ? 'On-model fit' : index === 0 ? 'Product view' : `View ${index + 1}`
+    }));
+}
+
+function escapeMarkup(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
 function cardHTML(p) {
     const isShopPage = document.body.classList.contains('shop-page');
     const isIndexPage = document.body.classList.contains('index-page');
@@ -210,8 +225,9 @@ function cardHTML(p) {
             <button class="wishlist-btn" onclick="event.stopPropagation();toggleWishlist(this)" aria-label="Wishlist">
                 <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
             </button>`;
-    const productVisual = p.image
-        ? `<img class="product-photo" src="${p.image}" alt="${p.name}" style="--photo-zoom:${p.imageScale || 1};">`
+    const images = productGallery(p);
+    const productVisual = images.length
+        ? `<span class="product-gallery-preview"><img class="product-photo product-photo-primary" src="${escapeMarkup(images[0].src)}" alt="${escapeMarkup(p.name)}" style="--photo-zoom:${p.imageScale || 1};">${images[1] ? `<img class="product-photo product-photo-hover" src="${escapeMarkup(images[1].src)}" alt="${escapeMarkup(p.name)} alternate view" style="--photo-zoom:${p.imageScale || 1};">` : ''}</span>`
         : `<div class="pi-inner" style="font-size:6rem;">${p.emoji}</div>`;
     return `
     <div class="product-card reveal" onclick="openModal(${p.id})">
@@ -239,10 +255,16 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     editingCartKey = cartKey;
     const isShopPage = document.body.classList.contains('shop-page');
     const canBuy = isShopPage || document.body.classList.contains('index-page');
-
-    document.getElementById('modal-img').innerHTML = p.image
-        ? `<img class="product-photo" src="${p.image}" alt="${p.name}" style="--photo-zoom:${p.imageScale || 1};">`
-        : `<span>${p.emoji}</span>`;
+    modalGallery = productGallery(p);
+    modalGalleryIndex = 0;
+    renderModalGallery(p);
+    const deliveryEstimate = document.getElementById('product-delivery-estimate');
+    if (deliveryEstimate) {
+        deliveryEstimate.innerHTML = canBuy
+            ? '<strong>Delivery estimate</strong><p>Enter a province and city to see the J&amp;T delivery estimate.</p><div class="product-estimate-fields"><input id="product-estimate-province" placeholder="Province" aria-label="Delivery province"><input id="product-estimate-city" placeholder="City or municipality" aria-label="Delivery city"><button type="button" onclick="estimateProductDelivery()">Check</button></div><p id="product-estimate-result" role="status"></p>'
+            : '';
+        deliveryEstimate.style.display = canBuy ? '' : 'none';
+    }
     document.getElementById('modal-img').style.background = p.bg + '15';
     document.getElementById('modal-cat').textContent  = p.cat;
     document.getElementById('modal-name').textContent = p.name;
@@ -289,6 +311,59 @@ function openModal(id, preselectedSize = null, cartKey = null) {
 
     document.getElementById('modal-overlay').classList.add('show');
     document.getElementById('overlay').classList.add('show');
+}
+
+function renderModalGallery(product) {
+    const container = document.getElementById('modal-img');
+    if (!container) return;
+    if (!modalGallery.length) {
+        container.innerHTML = `<span>${escapeMarkup(product.emoji || '')}</span>`;
+        return;
+    }
+    const sample = modalGallery[modalGalleryIndex];
+    container.innerHTML = `<img class="product-photo modal-gallery-photo" src="${escapeMarkup(sample.src)}" alt="${escapeMarkup(product.name)} — ${escapeMarkup(sample.label)}" style="--photo-zoom:${product.imageScale || 1};">${modalGallery.length > 1 ? `<button type="button" class="gallery-arrow gallery-prev" aria-label="Previous product photo" onclick="stepModalGallery(-1)">‹</button><button type="button" class="gallery-arrow gallery-next" aria-label="Next product photo" onclick="stepModalGallery(1)">›</button><span class="gallery-count">${modalGalleryIndex + 1} / ${modalGallery.length}</span>` : ''}<span class="gallery-label">${escapeMarkup(sample.label)}</span>`;
+    container.ontouchstart = event => { container.dataset.touchStartX = String(event.changedTouches[0].screenX); };
+    container.ontouchend = event => {
+        const startX = Number(container.dataset.touchStartX);
+        const distance = event.changedTouches[0].screenX - startX;
+        if (Math.abs(distance) > 45) stepModalGallery(distance < 0 ? 1 : -1);
+    };
+}
+
+function stepModalGallery(delta) {
+    if (modalGallery.length < 2 || !currentProduct) return;
+    modalGalleryIndex = (modalGalleryIndex + delta + modalGallery.length) % modalGallery.length;
+    renderModalGallery(currentProduct);
+}
+
+async function estimateProductDelivery() {
+    const result = document.getElementById('product-estimate-result');
+    const province = document.getElementById('product-estimate-province')?.value.trim();
+    const city = document.getElementById('product-estimate-city')?.value.trim();
+    if (!currentProduct || !province || !city) {
+        if (result) result.textContent = 'Enter both province and city.';
+        return;
+    }
+    result.textContent = 'Calculating delivery estimate...';
+    try {
+        const response = await fetch(getApiUrl('/api/shipping/quote'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                addressParts: { province, city },
+                items: [{ product: { id: currentProduct.id }, qty: 1 }]
+            })
+        });
+        const data = await parseResponse(response);
+        if (!response.ok || !data.success) throw new Error(data.message || 'Unable to estimate delivery.');
+        const date = value => {
+            const [year, month, day] = value.split('-').map(Number);
+            return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        };
+        result.textContent = `Estimated delivery: ${date(data.estimatedDelivery.from)}–${date(data.estimatedDelivery.to)} · Shipping ₱${Number(data.shippingFee).toFixed(2)}`;
+    } catch (error) {
+        result.textContent = error.message || 'Unable to estimate delivery.';
+    }
 }
 
 function selectSize(size, btn) {
@@ -880,11 +955,39 @@ function submitContact() {
 /* ────────────────────────────────────────
    NEWSLETTER
 ──────────────────────────────────────── */
-function subscribeNewsletter() {
-    const email = document.getElementById('nl-email').value.trim();
-    if (!email || !email.includes('@')) { showToast('Please enter a valid email'); return; }
-    document.getElementById('nl-email').value = '';
-    showToast('You\'re subscribed — welcome to PYNX.');
+async function subscribeNewsletter(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const emailInput = form.querySelector('#nl-email');
+    const button = form.querySelector('button[type="submit"]');
+    const email = emailInput.value.trim();
+    emailInput.value = email;
+    if (!emailInput.checkValidity()) {
+        emailInput.reportValidity();
+        return;
+    }
+
+    button.disabled = true;
+    try {
+        const response = await fetch(getApiUrl('/api/newsletter/subscribe'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const result = await parseResponse(response);
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Unable to subscribe right now. Please try again later.');
+        }
+        emailInput.value = '';
+        showToast(result.alreadySubscribed
+            ? 'This email is already subscribed.'
+            : 'You are subscribed to new-arrival and sale updates.');
+    } catch (error) {
+        console.error('Newsletter subscription failed:', error);
+        showToast(error.message || 'Unable to subscribe right now. Please try again later.');
+    } finally {
+        button.disabled = false;
+    }
 }
 
 /* ────────────────────────────────────────
@@ -1214,6 +1317,13 @@ const COLLECTION_META = {
     cap:    { label: 'Caps',   eyebrow: 'Headwear', desc: 'Structured silhouettes and elevated essentials built for everyday wear.', theme: 'dark' },
     bikini: { label: 'Bikini', eyebrow: 'Swimwear',  desc: 'Clean lines, soft coverage, and tonal pieces designed for motion.',        theme: 'light' }
 };
+const NEW_ARRIVAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+function isNewArrivalProduct(product) {
+    const createdAt = Date.parse(product.createdAt || '');
+    const now = Date.now();
+    return Number.isFinite(createdAt) && createdAt <= now && now - createdAt <= NEW_ARRIVAL_WINDOW_MS;
+}
 
 function collectionMetaFor(type, items) {
     return COLLECTION_META[type] || {
@@ -1274,8 +1384,8 @@ function initShopCollections() {
         collection = {
             title: 'New Arrivals',
             eyebrow: 'New Arrivals',
-            items: PRODUCTS,
-            emptyMessage: 'Stay tuned!'
+            items: PRODUCTS.filter(isNewArrivalProduct),
+            emptyMessage: 'No new arrivals right now. Sign up below to hear about new drops.'
         };
     } else if (type && typeItems.length) {
         const meta = collectionMetaFor(type, typeItems);

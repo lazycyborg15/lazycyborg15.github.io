@@ -147,11 +147,11 @@
         </div>
         <div class="footer-col">
             <h4>Stay Connected</h4>
-            <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get early access to new drops.</p>
-            <div class="nl-form">
-                <input type="email" id="nl-email" placeholder="Your email">
-                <button onclick="subscribeNewsletter()">→</button>
-            </div>
+            <p style="font-size:.78rem;color:rgba(240,240,235,.5);margin-bottom:.8rem;">Get email alerts for new arrivals and sale items. Unsubscribe anytime.</p>
+            <form class="nl-form" onsubmit="subscribeNewsletter(event)">
+                <input type="email" id="nl-email" placeholder="Your email" aria-label="Your email address" autocomplete="email" maxlength="254" required>
+                <button type="submit" aria-label="Subscribe to email updates">→</button>
+            </form>
             <div class="social-icons">
                 <a href="https://www.instagram.com/pynx.ph?stkn=MWkxbDRiOG84djZkdQ==" class="social-link" aria-label="Instagram" target="_blank" rel="noopener noreferrer">
                     <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
@@ -234,6 +234,7 @@
             <div class="modal-name" id="modal-name"></div>
             <div class="modal-price" id="modal-price"></div>
             <div class="modal-desc" id="modal-desc"></div>
+            <div class="product-delivery-estimate" id="product-delivery-estimate"></div>
             <div class="size-label" id="size-label-el"></div>
             <div class="size-grid"  id="size-grid"></div>
             <button class="btn-primary modal-add" onclick="addFromModal()">Add to Bag</button>
