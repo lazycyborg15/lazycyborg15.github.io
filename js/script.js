@@ -3,14 +3,14 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-                { id: 1,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-one.png', bg: '#1a1a1a',
-      desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
+                { id: 1,  name: 'Vintage Washed Cotton Baseball Cap - Blue',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.jpeg', bg: '#43566f',
+      desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 2,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue.png', bg: '#c9b89a',
-      desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
+                { id: 2,  name: 'Vintage Washed Cotton Baseball Cap - Black',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black.jpeg', bg: '#1a1a1a',
+      desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 3,  name: 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-two.png', bg: '#3a3a3a',
-      desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
+                { id: 3,  name: 'Vintage Washed Cotton Baseball Cap - Brown',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#50463f',
+      desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
     // BIKINIS
         { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 489, type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', imageScale: 1.35, bg: '#1a1a1a',
