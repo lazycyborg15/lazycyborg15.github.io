@@ -3379,6 +3379,56 @@
             .hero-logo-text { font-size: clamp(6.5rem, 10vw, 14rem); letter-spacing: 1.2rem; }
         }
 
+        /* Keep the home page compact without changing product card or grid spacing. */
+        .index-page .hero {
+            min-height: min(82vh, 760px);
+        }
+        .index-page .promo-marquee {
+            padding: 1.25rem 0 1rem;
+        }
+        .index-page .features {
+            padding: .5rem 2rem 1rem;
+        }
+        .index-page .feature {
+            padding: 1.25rem 1.5rem;
+        }
+        .index-page .section {
+            padding-top: 4rem;
+            padding-bottom: 4rem;
+        }
+        .index-page footer {
+            padding: 3rem 2.5rem 1.5rem;
+        }
+        .index-page .footer-grid {
+            margin-bottom: 2.5rem;
+        }
+        .index-page .footer-bottom {
+            padding-top: 1.25rem;
+        }
+
+        @media (max-width: 600px) {
+            .index-page .hero {
+                min-height: min(72vh, 560px);
+                min-height: min(72svh, 560px);
+            }
+            .index-page .features {
+                padding: .5rem 1rem 1rem;
+            }
+            .index-page .feature {
+                padding: 1rem .75rem;
+            }
+            .index-page .section {
+                padding-top: 3rem;
+                padding-bottom: 3rem;
+            }
+            .index-page footer {
+                padding: 2.5rem 1.2rem 1.25rem;
+            }
+            .index-page .footer-grid {
+                margin-bottom: 1.75rem;
+            }
+        }
+
         .caps-page .hero-logo-text {
             font-size: clamp(3.5rem, 8vw, 7rem);
             letter-spacing: .45rem;
