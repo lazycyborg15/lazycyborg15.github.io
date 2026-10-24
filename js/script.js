@@ -81,6 +81,18 @@ function hasTrackedStock(product) {
    RENDER PRODUCT GRIDS
 ──────────────────────────────────────── */
 async function loadProductCatalog() {
+    async function fetchCatalogJson(url, options = {}) {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 4000);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            if (!response.ok) throw new Error('Product catalog not available');
+            return await response.json();
+        } finally {
+            window.clearTimeout(timeout);
+        }
+    }
+
     const normalizeProduct = product => {
         const hasOutdatedBikiniPrice = product.type === 'bikini'
             && String(product.name || '').trim().toLowerCase() === 'pynx star bikini set'
@@ -141,18 +153,19 @@ async function loadProductCatalog() {
     }
 
     try {
-        const response = await fetch(getApiUrl(`/api/products?updated=${Date.now()}`), { cache: 'no-store' });
-        if (!response.ok) throw new Error('Product catalog not available');
-        const result = await response.json();
-        const data = result.products;
+        const useApi = Boolean(window.PYNX_API_CONFIGURED);
+        const result = await fetchCatalogJson(
+            useApi ? getApiUrl('/api/products') : 'data/products.json',
+            useApi ? { cache: 'no-store' } : {}
+        );
+        const data = useApi ? result.products : result;
         if (Array.isArray(data) && data.length) {
             PRODUCTS = data.map(normalizeProduct);
             normalizeCartSizes();
         }
     } catch (err) {
         try {
-            const response = await fetch(`data/products.json?updated=${Date.now()}`, { cache: 'no-store' });
-            const data = await response.json();
+            const data = await fetchCatalogJson('data/products.json');
             if (Array.isArray(data) && data.length) {
                 PRODUCTS = data.map(normalizeProduct);
                 normalizeCartSizes();
@@ -1379,7 +1392,7 @@ wishlist = loadWishlist();
 toggleAdminLink();
 updateCustomerAuthLinks();
 setActiveNav();
-window.PYNX_CATALOG_READY = loadProductCatalog().finally(() => {
+function initializeCatalogUI() {
     renderProducts();
     updateCartUI();
     updateWishlistBadge();
@@ -1390,6 +1403,10 @@ window.PYNX_CATALOG_READY = loadProductCatalog().finally(() => {
     setActiveNav();
     initShopCollections();
     if (typeof renderCheckoutSummary === 'function') renderCheckoutSummary();
-    // Keep the cart drawer open across page navigations until the customer closes it.
-    if (sessionStorage.getItem('pynx_cart_open') === 'true') openCart();
+}
+
+initializeCatalogUI();
+if (sessionStorage.getItem('pynx_cart_open') === 'true') openCart();
+window.PYNX_CATALOG_READY = loadProductCatalog().then(() => {
+    initializeCatalogUI();
 });
