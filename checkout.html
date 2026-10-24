@@ -771,9 +771,9 @@
                 const checkoutLayout = document.querySelector('.checkout-layout');
                 if (checkoutLayout) checkoutLayout.style.minHeight = `${checkoutLayout.scrollHeight}px`;
                 document.getElementById('checkout-form').style.display = 'none';
-                document.getElementById('checkout-email-note').textContent = result.receiptEmailConfigured
-                    ? 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives; you can track your order below.'
-                    : 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives. Email receipts are unavailable, so save your order number and tracking link.';
+                document.getElementById('checkout-email-note').textContent = result.receiptEmailSent
+                    ? 'Thanks for your order. We emailed your receipt and confirmation. Please check your spam folder if it is not in your inbox. Pay the courier when it arrives; you can track your order below.'
+                    : 'Thanks for your order. It is confirmed with payment pending. Pay the courier when it arrives. We could not email your receipt, so please save your order number and tracking link.';
                 if (result.order?.orderNumber) {
                     const ref = document.getElementById('checkout-order-ref');
                     ref.textContent = `Order number: ${result.order.orderNumber}`;

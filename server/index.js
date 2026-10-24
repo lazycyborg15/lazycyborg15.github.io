@@ -149,16 +149,34 @@ async function loadProductsWithPriceMigration() {
     product.type === 'bikini' &&
     String(product.name || '').trim().toLowerCase() === 'pynx star bikini set' &&
     Number(product.price) === 89;
+  const legacyCapName = 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear';
+  const hasLegacyCapName = product =>
+    product.type === 'cap' &&
+    String(product.name || '').trim() === legacyCapName &&
+    Array.isArray(SEEDS.products) &&
+    SEEDS.products.some(seed => String(seed.id) === String(product.id));
 
-  if (!products.some(hasOutdatedBikiniPrice)) return products;
+  if (!products.some(product => hasOutdatedBikiniPrice(product) || hasLegacyCapName(product))) return products;
 
   return withLock(async () => {
     const latestProducts = await loadProducts();
     let migrated = false;
     const updatedProducts = latestProducts.map(product => {
-      if (!hasOutdatedBikiniPrice(product)) return product;
+      if (hasOutdatedBikiniPrice(product)) {
+        migrated = true;
+        return { ...product, price: 489, originalPrice: 489, onSale: false };
+      }
+      if (!hasLegacyCapName(product)) return product;
+
+      const seed = SEEDS.products.find(candidate => String(candidate.id) === String(product.id));
       migrated = true;
-      return { ...product, price: 489, originalPrice: 489, onSale: false };
+      return {
+        ...product,
+        name: seed.name,
+        image: seed.image,
+        bg: seed.bg,
+        desc: seed.desc
+      };
     });
 
     if (migrated) await saveProducts(updatedProducts);
@@ -244,6 +262,9 @@ const EMAIL_PASS = String(process.env.EMAIL_PASS || '').replace(/["'\s]/g, '');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 8000,
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
@@ -537,16 +558,24 @@ function trackingUpdateEmail(order, event, req) {
     : '';
   const isOutForDelivery = event.stepIndex === 6;
   const isDelivered = event.stepIndex === 7;
-  const subject = isDelivered
-    ? `Your PYNX order ${number} has been delivered`
-    : isOutForDelivery
-      ? `Your PYNX order ${number} is out for delivery`
-      : `Your PYNX order ${number} is in transit`;
-  const update = isDelivered
-    ? `Your order has been delivered at ${event.location}.`
-    : isOutForDelivery
-      ? `Your package is out for delivery from ${event.location}.`
-      : `Your package is in transit. Latest update: ${step.title} at ${event.location}.`;
+  let subject;
+  let update;
+  if (isDelivered) {
+    subject = `Your PYNX order ${number} has been delivered`;
+    update = `Your order has been delivered at ${event.location}.`;
+  } else if (isOutForDelivery) {
+    subject = `Your PYNX order ${number} is out for delivery`;
+    update = `Your package is out for delivery from ${event.location}.`;
+  } else if (event.stepIndex === 0) {
+    subject = `Your PYNX order ${number} is being prepared`;
+    update = `Your order status is now ${step.title}.`;
+  } else if (event.stepIndex === 1) {
+    subject = `Your PYNX order ${number} is packaged for pickup`;
+    update = `Your order status is now ${step.title}.`;
+  } else {
+    subject = `Your PYNX order ${number} is in transit`;
+    update = `Your package is in transit. Latest update: ${step.title} at ${event.location}.`;
+  }
   const text = [
     `Hi ${order.firstName},`,
     '',
@@ -574,6 +603,35 @@ async function sendTrackingUpdateEmail(order, event, req) {
     const storedEvent = stored?.trackingEvents?.find(item => item.at === event.at);
     if (!storedEvent) throw new Error('Tracking update was not found while recording its email result.');
     storedEvent.notification = {
+      sent: Boolean(result.emailSent),
+      error: result.emailError || null,
+      at: new Date().toISOString(),
+    };
+    await saveOrders(orders);
+  });
+  return result;
+}
+
+async function sendPaymentStatusEmail(order) {
+  const number = orderNumber(order);
+  const subject = `Payment received for your PYNX order ${number}`;
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    `We have received your cash-on-delivery payment for order ${number}.`,
+    '',
+    `Amount paid: PHP ${Number(order.total).toFixed(2)}`,
+    `Payment status: Paid`,
+    '',
+    '- PYNX',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>We have received your cash-on-delivery payment for order <strong>${escapeHtml(number)}</strong>.</p><p><strong>Amount paid:</strong> PHP ${Number(order.total).toFixed(2)}<br><strong>Payment status:</strong> Paid</p><p>- PYNX</p></div>`;
+  const result = await notifyCustomer(String(order.email || '').trim(), subject, text, html);
+  await withLock(async () => {
+    const orders = await loadOrders();
+    const stored = orders.find(item => item.id === order.id);
+    if (!stored) return;
+    stored.paymentEmail = {
       sent: Boolean(result.emailSent),
       error: result.emailError || null,
       at: new Date().toISOString(),
@@ -1173,21 +1231,28 @@ app.post('/api/orders', async (req, res) => {
     return `${item.product?.name || 'Item'} x${item.qty || 1}${sizeText} - PHP ${price.toFixed(2)} each`;
   }).join('\n') || 'No items.';
 
-  const link = trackingUrl(req, order);
-  Promise.all([
+  const receiptPromise = sendOrderReceipt(order, req).catch(async error => {
+    console.error('Order was saved, but the customer receipt email could not be processed:', error);
+    const result = { emailSent: false, emailError: error.message || 'Receipt email failed.' };
+    await recordReceiptResult(order.id, result);
+    return result;
+  });
+  const [adminNotification, receiptResult] = await Promise.all([
     notifyAdmins(
       `New cash-on-delivery order from ${firstName} ${lastName}`,
       `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nItem subtotal: PHP ${order.subtotal.toFixed(2)}\nAdditional fee (shipping): PHP ${order.shippingFee.toFixed(2)}\nTotal to pay: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
     ),
-    sendOrderReceipt(order, req),
-  ]).then(() => {})
-    .catch(error => console.error('Order notification processing failed:', error));
+    receiptPromise,
+  ]);
+  if (!adminNotification.emailSent) {
+    console.error('Order was saved, but the admin email notification failed:', adminNotification.emailError);
+  }
 
   return res.status(201).json({
     success: true,
     order: { ...order, orderNumber: orderNumber(order) },
     trackingPath: `/track/${encodeURIComponent(orderNumber(order))}`,
-    customerEmailPending: true,
+    receiptEmailSent: Boolean(receiptResult.emailSent),
     receiptEmailConfigured: Boolean(EMAIL_USER && EMAIL_PASS),
   });
 });
@@ -1528,15 +1593,12 @@ app.post('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
 
     if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
     if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
-    const notificationRequired = stepIndex >= 2;
-    const emailResult = notificationRequired
-      ? await sendTrackingUpdateEmail(result.order, result.event, req)
-      : null;
+    const emailResult = await sendTrackingUpdateEmail(result.order, result.event, req);
     return res.json({
       success: true,
       order: result.order,
       locationFound: result.locationFound,
-      notificationRequired,
+      notificationRequired: true,
       emailSent: emailResult ? Boolean(emailResult.emailSent) : null,
       emailError: emailResult?.emailError || null,
     });
@@ -1549,8 +1611,8 @@ app.post('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
 app.post('/api/admin/orders/:id/tracking/:stepIndex/resend-email', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const stepIndex = Number(req.params.stepIndex);
-  if (!Number.isInteger(stepIndex) || stepIndex < 2 || stepIndex >= TRACKING_STEPS.length) {
-    return res.status(400).json({ success: false, message: 'Choose a shipped tracking update to resend.' });
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= TRACKING_STEPS.length) {
+    return res.status(400).json({ success: false, message: 'Choose a tracking update to resend.' });
   }
   try {
     const order = (await loadOrders()).find(item => item.id === orderId);
@@ -1640,7 +1702,14 @@ app.patch('/api/admin/orders/:id/payment', verifyAdmin, async (req, res) => {
     });
     if (order.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
     if (order.invalid) return res.status(409).json({ success: false, message: order.invalid });
-    return res.json({ success: true, order: order.order, unchanged: Boolean(order.unchanged) });
+    if (order.unchanged) return res.json({ success: true, order: order.order, unchanged: true });
+    const emailResult = await sendPaymentStatusEmail(order.order);
+    return res.json({
+      success: true,
+      order: order.order,
+      emailSent: Boolean(emailResult.emailSent),
+      emailError: emailResult.emailError || null,
+    });
   } catch (error) {
     console.error('Payment status update failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to mark this order paid.' });

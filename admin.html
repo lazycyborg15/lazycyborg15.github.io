@@ -646,7 +646,7 @@
     }
 
     function trackingNotificationHtml(order) {
-        const updates = (order.trackingEvents || []).filter(event => event.stepIndex >= 2);
+        const updates = order.trackingEvents || [];
         if (!updates.length) return '<span class="receipt-note">No shipment updates yet</span>';
         return updates.map(event => {
             const title = ADMIN_TRACKING_STEPS[event.stepIndex] || 'Tracking update';
@@ -852,8 +852,10 @@
             const data = await parseResponse(response);
             if (!response.ok || !data.success) throw new Error(data.message || 'Unable to update payment status.');
             await fetchOrders();
-            adminStatus.textContent = 'Cash-on-delivery payment marked paid.';
-            adminStatus.classList.remove('error');
+            adminStatus.textContent = data.emailSent
+                ? 'Cash-on-delivery payment marked paid; customer notified by email.'
+                : `Cash-on-delivery payment marked paid, but customer email failed: ${data.emailError || 'email is not configured.'}`;
+            adminStatus.classList.toggle('error', !data.emailSent);
         } catch (error) {
             adminStatus.textContent = error.message || 'Unable to update payment status.';
             adminStatus.classList.add('error');

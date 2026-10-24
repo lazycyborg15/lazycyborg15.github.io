@@ -57,6 +57,7 @@ Netlify hosts the pages and runs the API as a function ([netlify/functions/api.j
 3. **Settings:** in *Site configuration → Environment variables*, configure:
    - Required for persistent data and admin access: `MONGODB_URI`, `ADMIN_PASSWORD`, `JWT_SECRET` (use a long random value).
    - Required for customer emails: `EMAIL_USER` and `EMAIL_PASS` (your Gmail address and Google app password), plus `SITE_URL` set to your public Netlify site URL.
+     Order receipts and order/payment status emails are sent before the API confirms the email result. If a send fails, checkout tells the customer and the admin page records failed receipts and tracking emails for retry. Check the Netlify function logs and verify the Gmail app password if email is not sent.
    - Shipping fees use the store defaults below. `SHIPPING_RATES_JSON` is optional and only needed to replace those defaults. Enter each product's packed weight in Admin → Products & Inventory.
    - Required for GCash/card: `PAYMONGO_SECRET_KEY` and `PAYMONGO_WEBHOOK_SECRET`, after configuring the PayMongo webhook described below. Leave these unset to keep online payments disabled; cash on delivery remains available once shipping is configured.
    - Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`, `JNT_TRACKING_URL_TEMPLATE`, and `SHIP_FROM`.
