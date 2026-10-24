@@ -84,6 +84,20 @@
         .track-form input { padding: .8rem 1rem; border: 1px solid rgba(17,17,17,.2); border-radius: 8px; font: inherit; }
         .track-error { color: #b91c1c; margin: 1rem 1.25rem 0; }
         .track-cancel-order { margin-top: 1rem; min-height: 42px; }
+        .track-cancel-dialog { width: min(420px, calc(100% - 2rem)); margin: auto; padding: 0; border: 0; border-radius: 12px; color: #111; box-shadow: 0 24px 70px rgba(0,0,0,.24); }
+        .track-cancel-dialog::backdrop { background: rgba(17,17,17,.55); backdrop-filter: blur(3px); }
+        .track-cancel-dialog-content { padding: 1.5rem; }
+        .track-cancel-dialog h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
+        .track-cancel-dialog p { margin: 0; color: #4b5563; line-height: 1.5; }
+        .track-cancel-dialog-actions { display: flex; justify-content: flex-end; gap: .7rem; margin-top: 1.4rem; }
+        .track-cancel-dialog-actions button { min-height: 44px; padding: .65rem 1rem; border-radius: 4px; font: inherit; cursor: pointer; }
+        .track-cancel-dialog-keep { border: 1px solid #d1d5db; background: #fff; }
+        .track-cancel-dialog-confirm { background: #9f2d28; color: #fff; }
+        @media (max-width: 480px) {
+            .track-cancel-dialog-content { padding: 1.25rem; }
+            .track-cancel-dialog-actions { flex-direction: column-reverse; }
+            .track-cancel-dialog-actions button { width: 100%; }
+        }
     </style>
 </head>
 <body class="checkout-page">
@@ -108,6 +122,17 @@
 
     <div id="track-result"></div>
 
+    <dialog class="track-cancel-dialog" id="track-cancel-dialog" aria-labelledby="track-cancel-title" aria-describedby="track-cancel-description">
+        <div class="track-cancel-dialog-content">
+            <h2 id="track-cancel-title">Cancel this order?</h2>
+            <p id="track-cancel-description">This cannot be undone. Your items will be returned to stock and the store will be notified.</p>
+            <div class="track-cancel-dialog-actions">
+                <button type="button" class="track-cancel-dialog-keep" id="track-cancel-keep">Keep my order</button>
+                <button type="button" class="track-cancel-dialog-confirm" id="track-cancel-confirm">Yes, cancel order</button>
+            </div>
+        </div>
+    </dialog>
+
     <form id="track-form" class="track-form" style="display:none; margin-left:1.25rem; margin-right:1.25rem;">
         <p style="margin:0;">Enter the order number from your receipt and the email you used at checkout.</p>
         <input type="text" id="track-number" placeholder="Order number" required>
@@ -122,6 +147,18 @@
     const resultEl = document.getElementById('track-result');
     const formEl = document.getElementById('track-form');
     const errorEl = document.getElementById('track-error');
+    const cancelDialog = document.getElementById('track-cancel-dialog');
+
+    function confirmTrackedOrderCancellation() {
+        return new Promise(resolve => {
+            const finish = () => resolve(cancelDialog.returnValue === 'confirm');
+            cancelDialog.addEventListener('close', finish, { once: true });
+            cancelDialog.showModal();
+        });
+    }
+
+    document.getElementById('track-cancel-keep').addEventListener('click', () => cancelDialog.close('keep'));
+    document.getElementById('track-cancel-confirm').addEventListener('click', () => cancelDialog.close('confirm'));
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     const productImageUrl = value => {
@@ -216,7 +253,7 @@
     const canCancelOrder = order => Boolean(order.id && ['processing', 'done'].includes(order.status));
 
     async function cancelTrackedOrder(order, button) {
-        if (!canCancelOrder(order) || !confirm('Cancel this order? This cannot be undone.')) return;
+        if (!canCancelOrder(order) || !await confirmTrackedOrderCancellation()) return;
         button.disabled = true;
         button.textContent = 'Cancelling...';
         errorEl.textContent = '';
@@ -228,13 +265,10 @@
             order.statusUpdatedAt = data.order.statusUpdatedAt;
             order.statusTimes = data.order.statusTimes;
             order.events = [
-                { at: data.order.statusUpdatedAt, title: 'Order cancelled', description: 'This order was cancelled by the store.', major: true },
+                { at: data.order.statusUpdatedAt, title: 'Order cancelled', description: 'You cancelled this order.', major: true },
                 ...(order.events || []),
             ];
-            const previousHeight = resultEl.scrollHeight;
             renderOrder(order);
-            resultEl.style.minHeight = `${previousHeight}px`;
-            requestAnimationFrame(() => window.scrollTo(0, window.scrollY));
         } catch (error) {
             errorEl.textContent = error instanceof TypeError
                 ? 'We could not reach the store server. Please try again shortly.'

@@ -59,7 +59,7 @@ Netlify hosts the pages and runs the API as a function ([netlify/functions/api.j
    - Required for customer emails: `EMAIL_USER` and `EMAIL_PASS` (your Gmail address and Google app password), plus `SITE_URL` set to your public Netlify site URL.
      Order receipts and order/payment status emails are sent before the API confirms the email result. If a send fails, checkout tells the customer and the admin page records failed receipts and tracking emails for retry. Check the Netlify function logs and verify the Gmail app password if email is not sent.
    - Shipping fees use the store defaults below. `SHIPPING_RATES_JSON` is optional and only needed to replace those defaults. Enter each product's packed weight in Admin → Products & Inventory.
-   - Required for GCash/card: `PAYMONGO_SECRET_KEY` and `PAYMONGO_WEBHOOK_SECRET`, after configuring the PayMongo webhook described below. Leave these unset to keep online payments disabled; cash on delivery remains available once shipping is configured.
+   - Checkout currently accepts cash on delivery only while GCash/card approval is pending. PayMongo credentials do not enable online payments in this release; configure them only when online payments are enabled in the application.
    - Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`, `JNT_TRACKING_URL_TEMPLATE`, and `SHIP_FROM`.
 4. Redeploy, then open `<your-site-url>/api/health`; it should return `{"status":"ok"}`.
 5. Open `/admin.html` on the Netlify site and log in.
@@ -74,7 +74,7 @@ Netlify cannot keep files, so accounts, orders, reviews, messages, and product p
 - **J&T tracking:** optionally set `JNT_TRACKING_URL_TEMPLATE` to J&T's tracking-page URL with `{trackingNumber}` where the waybill number belongs. If unset, the J&T button opens its Philippines homepage.
 - **Site links:** `SITE_URL` is the public Netlify site URL used in email links. `PUBLIC_API_URL` is not needed when Netlify hosts both the site and API.
 
-Checkout requires packed weights for all ordered products; it refuses an order if a product weight is missing. Online payment options additionally require PayMongo credentials and webhook setup.
+Checkout requires packed weights for all ordered products; it refuses an order if a product weight is missing. Cash on delivery is currently the only available payment method.
 
 ### Deploy on Render instead
 

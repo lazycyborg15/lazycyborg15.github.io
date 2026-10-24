@@ -127,13 +127,13 @@
                 </div>
                 <fieldset class="checkout-payment">
                     <legend>PAYMENT METHOD:</legend>
-                    <label><input type="radio" name="payment-method" value="gcash" required> GCash</label>
-                    <label><input type="radio" name="payment-method" value="card" required> Card</label>
-                    <label><input type="radio" name="payment-method" value="cash_on_hand" required> Cash on delivery</label>
-                    <p id="checkout-payment-note">Choose a method to see how payment works. GCash and card details are entered securely on PayMongo, not on this website.</p>
+                    <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="gcash" disabled> GCash (coming soon)</label>
+                    <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="card" disabled> Card (coming soon)</label>
+                    <label><input type="radio" name="payment-method" value="cash_on_hand" required checked> Cash on delivery</label>
+                    <p id="checkout-payment-note">Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.</p>
                     <div class="checkout-payment-info" id="checkout-payment-info" role="status" aria-live="polite" hidden></div>
                 </fieldset>
-                <button class="btn-primary form-submit" id="checkout-submit" type="submit">Continue to payment</button>
+                <button class="btn-primary form-submit" id="checkout-submit" type="submit">Place order</button>
             </form>
             <div class="form-success checkout-success" id="checkout-success" style="display:none;">
                 <div class="check">✓</div>
@@ -520,8 +520,6 @@
             const updatePaymentInfo = () => {
                 const selected = document.querySelector('input[name="payment-method"]:checked')?.value;
                 const messages = {
-                    gcash: 'After you continue, PayMongo will open its secure checkout. Enter your GCash mobile number there and follow the authorization steps. Do not enter your GCash MPIN on this website.',
-                    card: 'After you continue, PayMongo will open its secure checkout. Enter your card number, expiry date, and security code there. PYNX does not collect or store your card details.',
                     cash_on_hand: 'Pay the courier in cash when your order is delivered.',
                 };
                 paymentInfo.textContent = messages[selected] || '';
@@ -532,15 +530,14 @@
                 const response = await fetch(getApiUrl('/api/checkout/config'), { cache: 'no-store' });
                 const config = await response.json();
                 if (!response.ok || !config.success) throw new Error(config.message || 'Checkout configuration is unavailable.');
-                if (!config.onlinePaymentsEnabled) {
-                    document.querySelectorAll('input[name="payment-method"][value="gcash"], input[name="payment-method"][value="card"]').forEach(input => {
-                        input.disabled = true;
-                        input.checked = false;
-                        input.closest('label').classList.add('payment-unavailable');
-                    });
-                    document.getElementById('checkout-payment-note').textContent = 'GCash and card will be available when PayMongo is configured. Cash on delivery is available now.';
-                    updatePaymentInfo();
-                }
+                document.querySelectorAll('input[name="payment-method"][value="gcash"], input[name="payment-method"][value="card"]').forEach(input => {
+                    input.disabled = true;
+                    input.checked = false;
+                    input.closest('label').hidden = true;
+                });
+                document.querySelector('input[name="payment-method"][value="cash_on_hand"]').checked = true;
+                document.getElementById('checkout-payment-note').textContent = 'Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.';
+                updatePaymentInfo();
                 if (!config.shippingConfigured) {
                     document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';
                 }
@@ -734,7 +731,7 @@
             checkoutSubmitting = true;
             const submitButton = this.querySelector('[type="submit"]');
             submitButton.disabled = true;
-            submitButton.textContent = paymentMethod === 'cash_on_hand' ? 'Placing order...' : 'Opening PayMongo...';
+            submitButton.textContent = 'Placing order...';
             try {
                 const response = await fetch(getApiUrl('/api/orders'), {
                     method: 'POST',
@@ -789,7 +786,7 @@
                 console.error('Checkout submission error:', error);
                 checkoutSubmitting = false;
                 submitButton.disabled = false;
-                submitButton.textContent = 'Continue to payment';
+                submitButton.textContent = 'Place order';
                 if (error instanceof TypeError || error.name === 'AbortError' || /Unexpected response/.test(error?.message || '')) {
                     alert('We could not reach the store server, so your order was not placed. Please try again in a moment.');
                     return;

@@ -1439,6 +1439,7 @@
         .checkout-payment { border: 1px solid var(--border); padding: 1rem; margin: 1.5rem 0; }
         .checkout-payment legend { font-size: .65rem; letter-spacing: .2rem; color: var(--mid); }
         .checkout-payment label { display: flex; gap: .6rem; align-items: center; padding: .5rem 0; }
+        .checkout-payment label[hidden] { display: none; }
         .checkout-payment input { accent-color: var(--ink); }
         .checkout-payment p { color: var(--mid); font-size: .78rem; margin: .5rem 0 0; }
         .checkout-payment .checkout-payment-info {

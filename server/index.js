@@ -14,6 +14,7 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
+const ONLINE_PAYMENTS_ENABLED = false;
 const DEFAULT_SHIPPING_ZONES = [
   {
     name: 'Cebu City',
@@ -150,13 +151,18 @@ async function loadProductsWithPriceMigration() {
     String(product.name || '').trim().toLowerCase() === 'pynx star bikini set' &&
     Number(product.price) === 89;
   const legacyCapName = 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear';
-  const hasLegacyCapName = product =>
-    product.type === 'cap' &&
-    String(product.name || '').trim() === legacyCapName &&
-    Array.isArray(SEEDS.products) &&
-    SEEDS.products.some(seed => String(seed.id) === String(product.id));
+  const capSeedFor = product => Array.isArray(SEEDS.products)
+    ? SEEDS.products.find(seed => seed.type === 'cap' && String(seed.id) === String(product.id))
+    : null;
+  const needsCapSeedUpdate = product => {
+    const seed = capSeedFor(product);
+    return Boolean(seed && (
+      product.image !== seed.image ||
+      String(product.name || '').trim() === legacyCapName
+    ));
+  };
 
-  if (!products.some(product => hasOutdatedBikiniPrice(product) || hasLegacyCapName(product))) return products;
+  if (!products.some(product => hasOutdatedBikiniPrice(product) || needsCapSeedUpdate(product))) return products;
 
   return withLock(async () => {
     const latestProducts = await loadProducts();
@@ -166,16 +172,16 @@ async function loadProductsWithPriceMigration() {
         migrated = true;
         return { ...product, price: 489, originalPrice: 489, onSale: false };
       }
-      if (!hasLegacyCapName(product)) return product;
+      if (!needsCapSeedUpdate(product)) return product;
 
-      const seed = SEEDS.products.find(candidate => String(candidate.id) === String(product.id));
+      const seed = capSeedFor(product);
       migrated = true;
       return {
         ...product,
-        name: seed.name,
         image: seed.image,
-        bg: seed.bg,
-        desc: seed.desc
+        ...(String(product.name || '').trim() === legacyCapName
+          ? { name: seed.name, bg: seed.bg, desc: seed.desc }
+          : {})
       };
     });
 
@@ -922,12 +928,22 @@ async function sendOrderReceipt(order, req) {
 
 async function createPayMongoCheckout(order, req) {
   if (!PAYMONGO_SECRET_KEY) throw new Error('Online payments are not configured. Please choose cash on delivery or contact the store.');
-  const lineItems = order.items.map(item => ({
-    currency: 'PHP',
-    amount: Math.round(Number(item.product.price) * 100),
-    name: String(item.product.name).slice(0, 100),
-    quantity: item.qty,
-  }));
+  const base = siteBaseUrl(req);
+  const lineItems = order.items.map(item => {
+    const image = String(item.product.image || '').trim();
+    const imageUrl = /^https?:\/\//i.test(image)
+      ? image
+      : base && image && !/^(?:javascript|data):/i.test(image)
+        ? `${base}/${image.replace(/^(?:\.\/|\/)+/, '')}`
+        : '';
+    return {
+      currency: 'PHP',
+      amount: Math.round(Number(item.product.price) * 100),
+      name: String(item.product.name).slice(0, 100),
+      quantity: item.qty,
+      ...(imageUrl ? { images: [imageUrl] } : {}),
+    };
+  });
   if (order.shippingFee > 0) {
     lineItems.push({
       currency: 'PHP',
@@ -936,7 +952,6 @@ async function createPayMongoCheckout(order, req) {
       quantity: 1,
     });
   }
-  const base = siteBaseUrl(req);
   const response = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
     method: 'POST',
     headers: {
@@ -1017,11 +1032,10 @@ app.post('/api/shipping/quote', async (req, res) => {
 });
 
 app.get('/api/checkout/config', (req, res) => {
-  const onlinePaymentsEnabled = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
   res.set('Cache-Control', 'no-store');
   return res.json({
     success: true,
-    onlinePaymentsEnabled,
+    onlinePaymentsEnabled: ONLINE_PAYMENTS_ENABLED,
     shippingConfigured: SHIPPING_ZONES.length > 0,
   });
 });
@@ -1109,11 +1123,8 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
   if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
-  if (!['gcash', 'card', 'cash_on_hand'].includes(paymentMethod)) {
-    return res.status(400).json({ success: false, message: 'Choose GCash, card, or cash on delivery.' });
-  }
-  if (paymentMethod !== 'cash_on_hand' && (!PAYMONGO_SECRET_KEY || !PAYMONGO_WEBHOOK_SECRET)) {
-    return res.status(503).json({ success: false, message: 'Online payments are not fully configured yet. Please choose cash on delivery.' });
+  if (paymentMethod !== 'cash_on_hand') {
+    return res.status(503).json({ success: false, message: 'GCash and card payments are not available yet. Please choose cash on delivery.' });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
