@@ -546,7 +546,7 @@
                             </div>
                             <div class="order-info-row">
                                 <label>Payment:</label>
-                                <span>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'card' ? 'Card' : 'Not recorded')} · ${esc(paymentStatus)}</span>
+                                <span>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : order.paymentMethod === 'card' ? 'Card' : 'Not recorded')} · ${esc(paymentStatus)}</span>
                             </div>
                             <div class="order-info-row">
                                 <label>Created:</label>

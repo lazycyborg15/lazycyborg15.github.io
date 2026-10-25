@@ -3,13 +3,13 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-                { id: 1,  name: 'Vintage Washed Cotton Baseball Cap - Blue',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue-updated.png', bg: '#43566f',
+                { id: 1,  name: 'Vintage Washed Cotton Baseball Cap - Blue',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue-updated.png', bg: '#43566f',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 2,  name: 'Vintage Washed Cotton Baseball Cap - Black',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-updated.png', bg: '#1a1a1a',
+                { id: 2,  name: 'Vintage Washed Cotton Baseball Cap - Black',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-updated.png', bg: '#1a1a1a',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 3,  name: 'Vintage Washed Cotton Baseball Cap - Brown',  cat: 'Headwear',  price: 469, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#50463f',
+                { id: 3,  name: 'Vintage Washed Cotton Baseball Cap - Brown',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#50463f',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
     // BIKINIS

@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import './Home.css';
 
 const products = [
-  { id: 1, name: 'Classic Snapback', price: 49, type: 'cap', emoji: '🧢' },
-  { id: 2, name: 'Athletic Fit', price: 59, type: 'cap', emoji: '🧢' },
-  { id: 3, name: 'Premium Wool', price: 79, type: 'cap', emoji: '🧢' },
+  { id: 1, name: 'Classic Snapback', price: 370, type: 'cap', emoji: '🧢' },
+  { id: 2, name: 'Athletic Fit', price: 370, type: 'cap', emoji: '🧢' },
+  { id: 3, name: 'Premium Wool', price: 370, type: 'cap', emoji: '🧢' },
   { id: 4, name: 'Minimal Triangle', price: 89, type: 'bikini', emoji: '👙' },
   { id: 5, name: 'Classic Bandeau', price: 99, type: 'bikini', emoji: '👙' },
   { id: 6, name: 'High-Waist Set', price: 129, type: 'bikini', emoji: '👙' },

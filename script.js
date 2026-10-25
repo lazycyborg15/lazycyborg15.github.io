@@ -3,13 +3,13 @@
 ──────────────────────────────────────── */
 const PRODUCTS = [
     // CAPS
-    { id: 1,  name: 'Classic Snapback',  cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#1a1a1a',
+    { id: 1,  name: 'Classic Snapback',  cat: 'Headwear',  price: 370,  type: 'cap',    emoji: '🧢', bg: '#1a1a1a',
       desc: 'A clean six-panel snapback in black ripstop canvas. Embroidered PYNX wordmark at the front. One size fits all with adjustable snap closure.',
       sizes: ['XS','S','M','L','XL'] },
-    { id: 2,  name: 'Athletic Fit',      cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#c9b89a',
+    { id: 2,  name: 'Athletic Fit',      cat: 'Headwear',  price: 370,  type: 'cap',    emoji: '🧢', bg: '#c9b89a',
       desc: 'Structured front panel, moisture-wicking sweatband. Ideal for active wear. Tone-on-tone PYNX embroidery. Fitted sizes available.',
       sizes: ['XS','S','M','L','XL'] },
-    { id: 3,  name: 'Premium Wool',      cat: 'Headwear',  price: 469,  type: 'cap',    emoji: '🧢', bg: '#3a3a3a',
+    { id: 3,  name: 'Premium Wool',      cat: 'Headwear',  price: 370,  type: 'cap',    emoji: '🧢', bg: '#3a3a3a',
       desc: 'Italian wool-blend construction for cooler climates. Structured silhouette, leather strap back. A cold-weather staple.',
       sizes: ['S','M','L'] },
     // BIKINIS

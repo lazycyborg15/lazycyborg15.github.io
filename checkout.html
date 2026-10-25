@@ -129,8 +129,9 @@
                     <legend>PAYMENT METHOD:</legend>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="gcash" disabled> GCash (coming soon)</label>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="card" disabled> Card (coming soon)</label>
+                    <label><input type="radio" name="payment-method" value="qrph"> QRPH</label>
                     <label><input type="radio" name="payment-method" value="cash_on_hand" required checked> Cash on delivery</label>
-                    <p id="checkout-payment-note">Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.</p>
+                    <p id="checkout-payment-note">Choose your payment method. QRPH is available for digital payment, and cash on delivery remains available at checkout.</p>
                     <div class="checkout-payment-info" id="checkout-payment-info" role="status" aria-live="polite" hidden></div>
                 </fieldset>
                 <button class="btn-primary form-submit" id="checkout-submit" type="submit">Place order</button>
@@ -521,6 +522,7 @@
                 const selected = document.querySelector('input[name="payment-method"]:checked')?.value;
                 const messages = {
                     cash_on_hand: 'Pay the courier in cash when your order is delivered.',
+                    qrph: 'After placing the order, pay via QRPH using the details provided in your confirmation email or order tracking.',
                 };
                 paymentInfo.textContent = messages[selected] || '';
                 paymentInfo.hidden = !selected;
@@ -536,7 +538,7 @@
                     input.closest('label').hidden = true;
                 });
                 document.querySelector('input[name="payment-method"][value="cash_on_hand"]').checked = true;
-                document.getElementById('checkout-payment-note').textContent = 'Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.';
+                document.getElementById('checkout-payment-note').textContent = 'Choose your payment method. QRPH is available for digital payment, and cash on delivery remains available at checkout.';
                 updatePaymentInfo();
                 if (!config.shippingConfigured) {
                     document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';

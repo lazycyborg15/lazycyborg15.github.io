@@ -768,7 +768,7 @@ function receiptEmail(order, link) {
     '',
     `Order number: ${number}`,
     `Order placed: ${placed}`,
-    `Payment method: ${order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card'}`,
+    `Payment method: ${order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card'}`,
     `Payment status: ${order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}`,
     '',
     'Items:',
@@ -793,7 +793,7 @@ function receiptEmail(order, link) {
 <p>Hi ${escapeHtml(order.firstName)},</p>
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
 <p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
-<p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
+<p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
 <table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
 <p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
@@ -1123,8 +1123,8 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
   if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
-  if (paymentMethod !== 'cash_on_hand') {
-    return res.status(503).json({ success: false, message: 'GCash and card payments are not available yet. Please choose cash on delivery.' });
+  if (paymentMethod !== 'cash_on_hand' && paymentMethod !== 'qrph') {
+    return res.status(503).json({ success: false, message: 'GCash and card payments are not available yet. Please choose cash on delivery or QRPH.' });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
@@ -1144,7 +1144,7 @@ app.post('/api/orders', async (req, res) => {
     contact: clean(contact, 32),
     inventoryReservations: [],
     paymentMethod,
-    paymentStatus: paymentMethod === 'cash_on_hand' ? 'pending' : 'awaiting_payment',
+    paymentStatus: paymentMethod === 'cash_on_hand' || paymentMethod === 'qrph' ? 'pending' : 'awaiting_payment',
     status: 'processing',
     trackingStepIndex: -1,
     trackingEvents: [],
@@ -1208,7 +1208,7 @@ app.post('/api/orders', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Order save failed. Please try again later.' });
   }
 
-  if (paymentMethod !== 'cash_on_hand') {
+  if (paymentMethod !== 'cash_on_hand' && paymentMethod !== 'qrph') {
     try {
       const session = await createPayMongoCheckout(order, req);
       await withLock(async () => {
