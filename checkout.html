@@ -129,9 +129,9 @@
                     <legend>PAYMENT METHOD:</legend>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="gcash" disabled> GCash (coming soon)</label>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="card" disabled> Card (coming soon)</label>
-                    <label><input type="radio" name="payment-method" value="qrph"> QRPH</label>
+                    <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="qrph" disabled> QRPH</label>
                     <label><input type="radio" name="payment-method" value="cash_on_hand" required checked> Cash on delivery</label>
-                    <p id="checkout-payment-note">Choose your payment method. QRPH is available for digital payment, and cash on delivery remains available at checkout.</p>
+                    <p id="checkout-payment-note">Cash on delivery is available. Checking PayMongo payment options...</p>
                     <div class="checkout-payment-info" id="checkout-payment-info" role="status" aria-live="polite" hidden></div>
                 </fieldset>
                 <button class="btn-primary form-submit" id="checkout-submit" type="submit">Place order</button>
@@ -522,7 +522,7 @@
                 const selected = document.querySelector('input[name="payment-method"]:checked')?.value;
                 const messages = {
                     cash_on_hand: 'Pay the courier in cash when your order is delivered.',
-                    qrph: 'After placing the order, pay via QRPH using the details provided in your confirmation email or order tracking.',
+                    qrph: 'You will be redirected to PayMongo to scan a QRPH code and complete your payment securely.',
                 };
                 paymentInfo.textContent = messages[selected] || '';
                 paymentInfo.hidden = !selected;
@@ -537,8 +537,14 @@
                     input.checked = false;
                     input.closest('label').hidden = true;
                 });
+                const qrphInput = document.querySelector('input[name="payment-method"][value="qrph"]');
+                qrphInput.disabled = !config.onlinePaymentsEnabled;
+                qrphInput.checked = false;
+                qrphInput.closest('label').hidden = !config.onlinePaymentsEnabled;
                 document.querySelector('input[name="payment-method"][value="cash_on_hand"]').checked = true;
-                document.getElementById('checkout-payment-note').textContent = 'Choose your payment method. QRPH is available for digital payment, and cash on delivery remains available at checkout.';
+                document.getElementById('checkout-payment-note').textContent = config.onlinePaymentsEnabled
+                    ? 'Choose QRPH to pay securely through PayMongo, or pay the courier in cash when your order is delivered.'
+                    : 'Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.';
                 updatePaymentInfo();
                 if (!config.shippingConfigured) {
                     document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';
@@ -882,6 +888,6 @@
         </div>
     </aside>
 
-    <script src="js/script.js?v=20261013-policy"></script>
+    <script src="js/script.js?v=20261026-catalog-payments"></script>
 </body>
 </html>

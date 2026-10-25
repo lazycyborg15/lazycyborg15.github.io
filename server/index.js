@@ -14,7 +14,7 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
-const ONLINE_PAYMENTS_ENABLED = false;
+const ONLINE_PAYMENTS_ENABLED = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
 const DEFAULT_SHIPPING_ZONES = [
   {
     name: 'Cebu City',
@@ -151,14 +151,25 @@ async function loadProductsWithPriceMigration() {
     String(product.name || '').trim().toLowerCase() === 'pynx star bikini set' &&
     Number(product.price) === 89;
   const legacyCapName = 'Vintage Cap | Washed Cotton Unisex Baseball Cap | Adjustable Casual Streetwear';
+  const legacyCapPrices = new Set([309, 469]);
   const capSeedFor = product => Array.isArray(SEEDS.products)
     ? SEEDS.products.find(seed => seed.type === 'cap' && String(seed.id) === String(product.id))
     : null;
+  const needsCapPriceUpdate = product => {
+    const seed = capSeedFor(product);
+    const price = Number(product.price);
+    return Boolean(seed
+      && Number(seed.price) !== price
+      && legacyCapPrices.has(price)
+      && Number(product.originalPrice ?? product.price) === price
+      && product.onSale !== true);
+  };
   const needsCapSeedUpdate = product => {
     const seed = capSeedFor(product);
     return Boolean(seed && (
       product.image !== seed.image ||
-      String(product.name || '').trim() === legacyCapName
+      String(product.name || '').trim() === legacyCapName ||
+      needsCapPriceUpdate(product)
     ));
   };
 
@@ -179,6 +190,9 @@ async function loadProductsWithPriceMigration() {
       return {
         ...product,
         image: seed.image,
+        ...(needsCapPriceUpdate(product)
+          ? { price: Number(seed.price), originalPrice: Number(seed.originalPrice ?? seed.price), onSale: false }
+          : {}),
         ...(String(product.name || '').trim() === legacyCapName
           ? { name: seed.name, bg: seed.bg, desc: seed.desc }
           : {})
@@ -966,7 +980,7 @@ async function createPayMongoCheckout(order, req) {
           success_url: `${base}/track/${encodeURIComponent(orderNumber(order))}?payment=success`,
           description: `PYNX order ${orderNumber(order)}`,
           reference_number: orderNumber(order),
-          payment_method_types: ['gcash', 'card'],
+          payment_method_types: [order.paymentMethod],
           line_items: lineItems,
           metadata: { order_id: order.id, order_number: orderNumber(order) },
         },
@@ -1123,8 +1137,8 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
   if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
-  if (paymentMethod !== 'cash_on_hand' && paymentMethod !== 'qrph') {
-    return res.status(503).json({ success: false, message: 'GCash and card payments are not available yet. Please choose cash on delivery or QRPH.' });
+  if (paymentMethod !== 'cash_on_hand' && (paymentMethod !== 'qrph' || !ONLINE_PAYMENTS_ENABLED)) {
+    return res.status(503).json({ success: false, message: 'QRPH payments are not configured. Please choose cash on delivery.' });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
@@ -1144,7 +1158,7 @@ app.post('/api/orders', async (req, res) => {
     contact: clean(contact, 32),
     inventoryReservations: [],
     paymentMethod,
-    paymentStatus: paymentMethod === 'cash_on_hand' || paymentMethod === 'qrph' ? 'pending' : 'awaiting_payment',
+    paymentStatus: paymentMethod === 'cash_on_hand' ? 'pending' : 'awaiting_payment',
     status: 'processing',
     trackingStepIndex: -1,
     trackingEvents: [],
@@ -1208,7 +1222,7 @@ app.post('/api/orders', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Order save failed. Please try again later.' });
   }
 
-  if (paymentMethod !== 'cash_on_hand' && paymentMethod !== 'qrph') {
+  if (paymentMethod !== 'cash_on_hand') {
     try {
       const session = await createPayMongoCheckout(order, req);
       await withLock(async () => {
