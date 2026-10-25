@@ -665,6 +665,25 @@ async function sendPaymentStatusEmail(order) {
   return result;
 }
 
+async function sendPendingPaymentEmail(order, checkoutUrl) {
+  const number = orderNumber(order);
+  const subject = `Payment pending for your PYNX order ${number}`;
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    `Payment for your PYNX order ${number} is still pending.`,
+    `Total to pay: PHP ${Number(order.total).toFixed(2)}`,
+    '',
+    `Return to PayMongo to complete your QRPH payment: ${checkoutUrl}`,
+    '',
+    'Your order will be processed after PayMongo confirms your payment.',
+    '',
+    '- PYNX',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>Payment for your PYNX order <strong>${escapeHtml(number)}</strong> is still pending.</p><p><strong>Total to pay:</strong> PHP ${Number(order.total).toFixed(2)}</p><p>Your order will be processed after PayMongo confirms your payment.</p><p style="margin:24px 0"><a href="${escapeHtml(checkoutUrl)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Resume QRPH payment</a></p><p>- PYNX</p></div>`;
+  return notifyCustomer(String(order.email || '').trim(), subject, text, html);
+}
+
 function orderItemLines(items) {
   return items.map(item => {
     const price = Number(item.product?.price) || 0;
@@ -1243,11 +1262,16 @@ app.post('/api/orders', async (req, res) => {
           await saveOrders(orders);
         }
       });
+      const pendingPaymentEmail = await sendPendingPaymentEmail(order, session.url);
+      if (!pendingPaymentEmail.emailSent) {
+        console.error('PayMongo checkout was created, but the pending-payment email was not sent:', pendingPaymentEmail.emailError);
+      }
       return res.status(201).json({
         success: true,
         order: { ...order, orderNumber: orderNumber(order) },
         checkoutUrl: session.url,
         trackingPath: `/track/${encodeURIComponent(orderNumber(order))}`,
+        paymentEmailSent: Boolean(pendingPaymentEmail.emailSent),
       });
     } catch (error) {
       console.error('Online checkout setup failed:', error.message);
