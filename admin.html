@@ -503,7 +503,7 @@
                     <div class="order-card-header">
                         <span class="order-number">${esc(orderRef)} <small class="order-ref">${new Date(order.createdAt).toLocaleDateString()}</small></span>
                         <div class="order-header-actions">
-                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${trackingStep >= 0 ? esc(['Preparing to ship', 'Packaged for pickup', 'Arrived at sorting center', 'Left sorting center', 'Carrier processing', 'Arrived at nearest hub', 'Out for delivery', 'Delivered'][trackingStep]) : statusLabels[status]}</span>
+                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${trackingStep >= 0 ? esc(order.trackingEvents?.[order.trackingEvents.length - 1]?.title || ['Preparing to ship', 'Packaged for pickup', 'Arrived at sorting center', 'Left the sorting center', 'Carrier processing', 'Arrived at nearest hub', 'Out for delivery', 'Delivered'][trackingStep]) : statusLabels[status]}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
                             ${orderActions(order, status)}
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
@@ -649,7 +649,7 @@
         const updates = order.trackingEvents || [];
         if (!updates.length) return '<span class="receipt-note">No shipment updates yet</span>';
         return updates.map(event => {
-            const title = ADMIN_TRACKING_STEPS[event.stepIndex] || 'Tracking update';
+            const title = event.title || ADMIN_TRACKING_STEPS[event.stepIndex] || 'Tracking update';
             const info = event.notification;
             const status = info?.sent
                 ? '<span class="receipt-note ok">Sent</span>'
@@ -701,12 +701,22 @@
         'Out for delivery',
         'Delivered'
     ];
+    const ADMIN_STATUS_MILESTONES = [
+        { stepIndex: 0, title: 'Preparing order' },
+        { stepIndex: 1, title: 'Ready for courier' },
+        { stepIndex: 3, title: 'Shipped' },
+        { stepIndex: 6, title: 'Out for delivery' },
+        { stepIndex: 7, title: 'Delivered' }
+    ];
 
     function orderActions(order, status) {
-        const stepIndex = Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1;
-        const nextStep = stepIndex + 1;
-        const nextButton = nextStep < ADMIN_TRACKING_STEPS.length && status !== 'cancelled'
-            ? `<button type="button" class="order-tracking-btn" data-order-id="${esc(order.id)}" data-step-index="${nextStep}">Post: ${esc(ADMIN_TRACKING_STEPS[nextStep])}</button>`
+        const statusStepIndex = { processing: -1, done: 1, shipped: 3, delivered: 7, cancelled: 7 }[status] ?? -1;
+        const stepIndex = Number.isInteger(order.trackingStepIndex)
+            ? Math.max(order.trackingStepIndex, statusStepIndex)
+            : statusStepIndex;
+        const nextMilestone = ADMIN_STATUS_MILESTONES.find(milestone => milestone.stepIndex > stepIndex);
+        const statusControl = nextMilestone && !['cancelled', 'delivered'].includes(status)
+            ? `<div class="order-status-control"><select class="order-tracking-select" aria-label="New order status" data-order-id="${esc(order.id)}">${ADMIN_STATUS_MILESTONES.filter(milestone => milestone.stepIndex > stepIndex).map(milestone => `<option value="${milestone.stepIndex}">${esc(milestone.title)}</option>`).join('')}</select><button type="button" class="order-tracking-btn" data-order-id="${esc(order.id)}">Update status</button></div>`
             : '';
         const cancelButton = ['processing', 'done'].includes(status)
             ? `<button type="button" class="order-done-btn cancel" data-order-id="${esc(order.id)}" data-status="cancelled">Cancel order</button>`
@@ -714,7 +724,7 @@
         const paidButton = order.paymentMethod === 'cash_on_hand' && status === 'delivered' && order.paymentStatus !== 'paid'
             ? `<button type="button" class="order-payment-btn" data-order-id="${esc(order.id)}">Mark cash received</button>`
             : '';
-        return `${nextButton}${paidButton}${cancelButton}`;
+        return `${statusControl}${paidButton}${cancelButton}`;
     }
 
     async function setOrderStatus(orderId, status, button) {
@@ -775,19 +785,17 @@
     }
 
     async function postTrackingStep(orderId, stepIndex, button) {
-        const location = await showAdminDialog({
-            title: 'Update shipment location',
-            message: `Enter the location for “${ADMIN_TRACKING_STEPS[stepIndex]}”. The customer will see it on the tracking page.`,
-            confirmLabel: 'Post update',
-            inputLabel: 'Package location',
-            placeholder: 'City, province',
-            required: true
-        });
-        if (location === null) return;
-        if (!location.trim()) {
-            adminStatus.textContent = 'A location is required for every tracking update.';
-            adminStatus.classList.add('error');
-            return;
+        let location = '';
+        if (stepIndex === 3 || stepIndex === 6) {
+            const answer = await showAdminDialog({
+                title: 'Add package location (optional)',
+                message: 'Add the package location for the customer’s tracking page, or leave it blank to skip.',
+                confirmLabel: 'Continue',
+                inputLabel: 'Package location',
+                placeholder: 'City, province'
+            });
+            if (answer === null) return;
+            location = answer.trim();
         }
         const token = getToken();
         button.disabled = true;
@@ -808,8 +816,8 @@
                     ? ' Customer notification email sent.'
                     : ` Customer email failed: ${data.emailError || 'email is not configured.'} Use Retry email after fixing email settings.`
                 : '';
-            adminStatus.textContent = `Tracking step saved. ${locationMessage}${emailMessage}`;
-            adminStatus.classList.toggle('error', !data.locationFound || (data.notificationRequired && !data.emailSent));
+            adminStatus.textContent = `Status updated. ${location ? locationMessage : ''}${emailMessage}`;
+            adminStatus.classList.toggle('error', (Boolean(location) && !data.locationFound) || (data.notificationRequired && !data.emailSent));
         } catch (error) {
             adminStatus.textContent = error.message || 'Unable to save tracking update.';
             adminStatus.classList.add('error');
@@ -899,7 +907,8 @@
         }
         const trackingButton = event.target.closest('.order-tracking-btn');
         if (trackingButton) {
-            postTrackingStep(trackingButton.dataset.orderId, Number(trackingButton.dataset.stepIndex), trackingButton);
+            const statusSelect = trackingButton.closest('.order-status-control').querySelector('.order-tracking-select');
+            postTrackingStep(trackingButton.dataset.orderId, Number(statusSelect?.value), trackingButton);
             return;
         }
         const waybillButton = event.target.closest('[data-waybill-id]');

@@ -2208,6 +2208,8 @@
         .waybill-panel small { flex-basis: 100%; color: var(--mid); }
         .order-tracking-btn, .order-payment-btn { padding: .6rem .8rem; background: var(--ink); color: var(--bg); font-size: .68rem; letter-spacing: .04rem; }
         .order-payment-btn { background: #176f56; }
+        .order-status-control { display: flex; align-items: center; gap: .4rem; }
+        .order-tracking-select { min-width: 9.5rem; padding: .55rem .6rem; border: 1px solid var(--border); background: #fff; font: inherit; font-size: .78rem; }
 
         .order-card:hover {
             box-shadow: 0 4px 20px rgba(17,17,17,.08);

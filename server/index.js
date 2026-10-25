@@ -567,6 +567,8 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&'
 
 function trackingUpdateEmail(order, event, req) {
   const step = TRACKING_STEPS[event.stepIndex];
+  const title = event.title || step.title;
+  const location = event.location || '';
   const number = orderNumber(order);
   const trackLink = trackingUrl(req, order);
   const trackingNumber = String(order.trackingNumber || '');
@@ -582,19 +584,21 @@ function trackingUpdateEmail(order, event, req) {
   let update;
   if (isDelivered) {
     subject = `Your PYNX order ${number} has been delivered`;
-    update = `Your order has been delivered at ${event.location}.`;
+    update = location ? `Your order has been delivered at ${location}.` : 'Your order has been delivered.';
   } else if (isOutForDelivery) {
     subject = `Your PYNX order ${number} is out for delivery`;
-    update = `Your package is out for delivery from ${event.location}.`;
+    update = location ? `Your package is out for delivery from ${location}.` : 'Your package is out for delivery.';
   } else if (event.stepIndex === 0) {
     subject = `Your PYNX order ${number} is being prepared`;
-    update = `Your order status is now ${step.title}.`;
+    update = `Your order status is now ${title}.`;
   } else if (event.stepIndex === 1) {
     subject = `Your PYNX order ${number} is packaged for pickup`;
-    update = `Your order status is now ${step.title}.`;
+    update = `Your order status is now ${title}.`;
   } else {
     subject = `Your PYNX order ${number} is in transit`;
-    update = `Your package is in transit. Latest update: ${step.title} at ${event.location}.`;
+    update = location
+      ? `Your package is in transit. Latest update: ${title} at ${location}.`
+      : `Your package status is now ${title}.`;
   }
   const text = [
     `Hi ${order.firstName},`,
@@ -603,14 +607,14 @@ function trackingUpdateEmail(order, event, req) {
     '',
     `Order number: ${number}`,
     ...(trackingNumber ? [`J&T tracking number: ${trackingNumber}`] : []),
-    `Tracking update: ${step.title}`,
-    `Location: ${event.location}`,
+    `Tracking update: ${title}`,
+    ...(location ? [`Location: ${location}`] : []),
     `Track on our site: ${trackLink}`,
     ...(jntUrl ? [`Track on J&T: ${jntUrl}`] : []),
     '',
     '- PYNX',
   ].join('\n');
-  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>${escapeHtml(update)}</p><p><strong>Order number:</strong> ${escapeHtml(number)}${trackingNumber ? `<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}` : ''}<br><strong>Tracking update:</strong> ${escapeHtml(step.title)}<br><strong>Location:</strong> ${escapeHtml(event.location)}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p>${jntUrl ? `<p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p>` : ''}<p>- PYNX</p></div>`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>${escapeHtml(update)}</p><p><strong>Order number:</strong> ${escapeHtml(number)}${trackingNumber ? `<br><strong>J&amp;T tracking number:</strong> ${escapeHtml(trackingNumber)}` : ''}<br><strong>Tracking update:</strong> ${escapeHtml(title)}${location ? `<br><strong>Location:</strong> ${escapeHtml(location)}` : ''}</p><p><a href="${escapeHtml(trackLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on PYNX</a></p>${jntUrl ? `<p><a href="${escapeHtml(jntUrl)}" style="background:#e11d48;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track on J&amp;T</a></p>` : ''}<p>- PYNX</p></div>`;
   return { subject, text, html };
 }
 
@@ -694,8 +698,14 @@ function trackingEvents(order) {
       const step = TRACKING_STEPS[event.stepIndex];
       return {
         at: event.at,
-        title: step?.title || 'Package update',
-        description: event.location,
+        title: event.title || step?.title || 'Package update',
+        description: event.location || ({
+          0: 'We received your order and are preparing it.',
+          1: 'Your order is packed and ready for the courier.',
+          3: 'Your order has been shipped.',
+          6: 'Your package is out for delivery.',
+          7: 'Your package has been delivered.',
+        }[event.stepIndex] || 'Your order status was updated.'),
         major: true,
         location: event.location,
       };
@@ -1588,22 +1598,33 @@ app.post('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const stepIndex = Number(req.body.stepIndex);
   const location = clean(req.body.location, 200);
-  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= TRACKING_STEPS.length) {
-    return res.status(400).json({ success: false, message: 'Choose one of the eight supported tracking steps.' });
+  const milestoneTitles = {
+    0: 'Preparing order',
+    1: 'Ready for courier',
+    3: 'Shipped',
+    6: 'Out for delivery',
+    7: 'Delivered',
+  };
+  if (!Object.prototype.hasOwnProperty.call(milestoneTitles, stepIndex)) {
+    return res.status(400).json({ success: false, message: 'Choose a supported order status.' });
   }
-  if (!location) return res.status(400).json({ success: false, message: 'Enter the location for this tracking update.' });
 
   try {
-    const point = await geocode(location);
+    const point = location ? await geocode(location) : null;
     const result = await withLock(async () => {
       const orders = await loadOrders();
       const order = orders.find(item => item.id === orderId);
       if (!order) return { missing: true };
       if (order.status === 'cancelled') return { invalid: 'Cancelled orders cannot receive tracking updates.' };
-      if (stepIndex !== (Number.isInteger(order.trackingStepIndex) ? order.trackingStepIndex : -1) + 1) {
-        return { invalid: `Post the next step in order: ${TRACKING_STEPS[(order.trackingStepIndex ?? -1) + 1]?.title || 'tracking is complete'}.` };
+      if (order.status === 'delivered') return { invalid: 'Delivered orders cannot receive further status updates.' };
+      const statusStepIndex = { processing: -1, done: 1, shipped: 3, delivered: 7 }[order.status] ?? -1;
+      const currentStepIndex = Number.isInteger(order.trackingStepIndex)
+        ? Math.max(order.trackingStepIndex, statusStepIndex)
+        : statusStepIndex;
+      if (stepIndex <= currentStepIndex) {
+        return { invalid: 'Choose a later status than the order’s current status.' };
       }
-      const event = { stepIndex, location, ...(point ? { point } : {}), at: new Date().toISOString() };
+      const event = { stepIndex, title: milestoneTitles[stepIndex], location, ...(point ? { point } : {}), at: new Date().toISOString() };
       order.trackingEvents = [...(order.trackingEvents || []), event];
       order.trackingStepIndex = stepIndex;
       order.status = stepIndex === TRACKING_STEPS.length - 1
