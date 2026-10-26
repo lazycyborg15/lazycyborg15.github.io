@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
+const RETURN_POLICY_VERSION = '2026-10-26-15-day';
 const PORT = process.env.PORT || 5000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const SEED_DIR = path.join(__dirname, '../data');
@@ -1159,6 +1160,7 @@ app.post('/api/webhooks/paymongo', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   const { firstName, lastName, email, contact, items = [] } = req.body;
   const paymentMethod = String(req.body.paymentMethod || '');
+  const returnPolicyAgreement = req.body.returnPolicyAgreement;
   const addressParts = cleanAddressParts(req.body.addressParts);
   const address = addressParts ? formatAddressParts(addressParts) : clean(req.body.address, 400);
 
@@ -1166,6 +1168,10 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
   if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
+  const returnPolicyAgreedAt = Date.parse(returnPolicyAgreement?.agreedAt || '');
+  if (returnPolicyAgreement?.version !== RETURN_POLICY_VERSION || !Number.isFinite(returnPolicyAgreedAt)) {
+    return res.status(400).json({ success: false, message: 'Please review and agree to the current return and refund policy before placing your order.' });
+  }
   if (paymentMethod !== 'cash_on_hand' && (paymentMethod !== 'qrph' || !ONLINE_PAYMENTS_ENABLED)) {
     return res.status(503).json({ success: false, message: 'QRPH payments are not configured. Please choose cash on delivery.' });
   }
@@ -1182,6 +1188,10 @@ app.post('/api/orders', async (req, res) => {
     lastName: clean(lastName, 80),
     address,
     addressParts,
+    returnPolicyAgreement: {
+      version: RETURN_POLICY_VERSION,
+      agreedAt: new Date(returnPolicyAgreedAt).toISOString(),
+    },
     ...(cleanPoint(req.body.location) ? { destination: cleanPoint(req.body.location) } : {}),
     email: String(email).trim().toLowerCase(),
     contact: clean(contact, 32),

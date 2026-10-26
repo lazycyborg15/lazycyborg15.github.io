@@ -3,17 +3,17 @@
 ──────────────────────────────────────── */
 let PRODUCTS = [
     // CAPS
-                { id: 1,  name: 'Vintage Washed Cotton Baseball Cap - Blue',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue-updated.png', bg: '#43566f',
+                { id: 1,  name: 'Vintage Washed Cotton Baseball Cap - Blue',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-blue-updated.png', images: ['assets/caps/pynx-vintage-cap-blue-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'], bg: '#43566f',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 2,  name: 'Vintage Washed Cotton Baseball Cap - Black',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-updated.png', bg: '#1a1a1a',
+                { id: 2,  name: 'Vintage Washed Cotton Baseball Cap - Black',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-black-updated.png', images: ['assets/caps/pynx-vintage-cap-black-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'], bg: '#1a1a1a',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
-                { id: 3,  name: 'Vintage Washed Cotton Baseball Cap - Brown',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', bg: '#50463f',
+                { id: 3,  name: 'Vintage Washed Cotton Baseball Cap - Brown',  cat: 'Headwear',  price: 370, type: 'cap',    emoji: '🧢', image: 'assets/caps/pynx-vintage-cap-brown.jpeg', images: ['assets/caps/pynx-vintage-cap-brown-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'], bg: '#50463f',
       desc: 'Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.',
     sizes: [] },
     // BIKINIS
-        { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 489, type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', imageScale: 1.35, bg: '#1a1a1a',
+        { id: 4,  name: 'Pynx Star Bikini Set',  cat: 'Swimwear',  price: 489, type: 'bikini', emoji: '👙', image: 'assets/bikinis/pynx-star-bikini-set.png', images: ['assets/bikinis/pynx-star-bikini-bottom-detail.png', 'assets/bikinis/pynx-star-bikini-logo-detail.png', 'assets/bikinis/pynx-star-bikini-set-detail.png'], imageScale: 1.35, bg: '#1a1a1a',
             desc: 'Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.',
     sizes: ['Small','Medium','Large'] },
 ];
@@ -28,6 +28,7 @@ let selectedSize    = null;
 let editingCartKey  = null;
 let modalGallery = [];
 let modalGalleryIndex = 0;
+let modalGalleryDirection = 'next';
 let selectedCartKeys = new Set();
 let selectedWishlistIds = new Set();
 
@@ -94,12 +95,36 @@ async function loadProductCatalog() {
     }
 
     const normalizeProduct = product => {
+        const capGalleryImages = {
+            1: ['assets/caps/pynx-vintage-cap-blue-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'],
+            2: ['assets/caps/pynx-vintage-cap-black-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'],
+            3: ['assets/caps/pynx-vintage-cap-brown-side.png', 'assets/caps/pynx-vintage-caps-all-colors-fit.png'],
+        };
+        const bikiniGalleryImages = {
+            4: [
+                'assets/bikinis/pynx-star-bikini-bottom-detail.png',
+                'assets/bikinis/pynx-star-bikini-logo-detail.png',
+                'assets/bikinis/pynx-star-bikini-set-detail.png',
+            ],
+        };
         const hasOutdatedBikiniPrice = product.type === 'bikini'
             && String(product.name || '').trim().toLowerCase() === 'pynx star bikini set'
             && Number(product.price) === 89;
         return {
             ...product,
             ...(hasOutdatedBikiniPrice ? { price: 489, originalPrice: 489, onSale: false } : {}),
+            ...(product.type === 'cap' && capGalleryImages[product.id] ? {
+                images: [
+                    ...capGalleryImages[product.id],
+                    ...(Array.isArray(product.images) ? product.images.filter(image => !Object.values(capGalleryImages).flat().includes(image)) : []),
+                ],
+            } : {}),
+            ...(product.type === 'bikini' && bikiniGalleryImages[product.id] ? {
+                images: [
+                    ...bikiniGalleryImages[product.id],
+                    ...(Array.isArray(product.images) ? product.images.filter(image => !Object.values(bikiniGalleryImages).flat().includes(image)) : []),
+                ],
+            } : {}),
             sizes: product.type === 'cap'
                 ? []
                 : product.type === 'bikini'
@@ -210,7 +235,24 @@ function productGallery(product) {
         .filter((source, index, all) => typeof source === 'string' && source.trim() && all.indexOf(source) === index);
     return sources.map((src, index) => ({
         src,
-        label: product.fitImage === src ? 'On-model fit' : index === 0 ? 'Product view' : `View ${index + 1}`
+        scale: product.type === 'bikini' && index > 0
+            ? 1
+            : product.type === 'cap'
+                ? 1
+                : product.imageScale || 1,
+        label: product.fitImage === src
+            ? 'On-model fit'
+            : src.includes('-side')
+                ? 'Side view'
+                : src.includes('caps-all-colors')
+                    ? 'All cap colors'
+                    : product.type === 'bikini' && index === 1
+                        ? 'Star detail'
+                        : product.type === 'bikini' && index === 2
+                            ? 'Logo detail'
+                            : product.type === 'bikini' && index === 3
+                                ? 'Bikini detail'
+                    : index === 0 ? 'Product view' : `View ${index + 1}`
     }));
 }
 
@@ -239,11 +281,13 @@ function cardHTML(p) {
                 <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
             </button>`;
     const images = productGallery(p);
+    const photoScale = p.type === 'cap' ? 1 : p.imageScale || 1;
+    const alternatePhotoScale = p.type === 'cap' ? 1 : p.imageScale || 1;
     const productVisual = images.length
-        ? `<span class="product-gallery-preview"><img class="product-photo product-photo-primary" src="${escapeMarkup(images[0].src)}" alt="${escapeMarkup(p.name)}" style="--photo-zoom:${p.imageScale || 1};">${images[1] ? `<img class="product-photo product-photo-hover" src="${escapeMarkup(images[1].src)}" alt="${escapeMarkup(p.name)} alternate view" style="--photo-zoom:${p.imageScale || 1};">` : ''}</span>`
+        ? `<span class="product-gallery-preview"><img class="product-photo product-photo-primary" src="${escapeMarkup(images[0].src)}" alt="${escapeMarkup(p.name)}" style="--photo-zoom:${photoScale};">${images[1] ? `<img class="product-photo product-photo-hover" src="${escapeMarkup(images[1].src)}" alt="${escapeMarkup(p.name)} alternate view" style="--photo-zoom:${alternatePhotoScale};">` : ''}</span>`
         : `<div class="pi-inner" style="font-size:6rem;">${p.emoji}</div>`;
     return `
-    <div class="product-card reveal" onclick="openModal(${p.id})">
+    <div class="product-card${p.type === 'cap' ? ' product-card-cap' : ''} reveal" onclick="openModal(${p.id})">
         <div class="product-image" style="background:${p.bg}20;" role="button" tabindex="0" aria-label="View details for ${p.name}" onclick="event.stopPropagation();openModal(${p.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); openModal(${p.id}); }">
             ${productVisual}${actionOverlay}
             ${wishlistButton}
@@ -270,6 +314,7 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     const canBuy = isShopPage || document.body.classList.contains('index-page');
     modalGallery = productGallery(p);
     modalGalleryIndex = 0;
+    modalGalleryDirection = 'next';
     renderModalGallery(p);
     document.getElementById('modal-img').style.background = p.bg + '15';
     document.getElementById('modal-cat').textContent  = p.cat;
@@ -322,12 +367,13 @@ function openModal(id, preselectedSize = null, cartKey = null) {
 function renderModalGallery(product) {
     const container = document.getElementById('modal-img');
     if (!container) return;
+    container.classList.toggle('cap-gallery', product.type === 'cap');
     if (!modalGallery.length) {
         container.innerHTML = `<span>${escapeMarkup(product.emoji || '')}</span>`;
         return;
     }
     const sample = modalGallery[modalGalleryIndex];
-    container.innerHTML = `<img class="product-photo modal-gallery-photo" src="${escapeMarkup(sample.src)}" alt="${escapeMarkup(product.name)} — ${escapeMarkup(sample.label)}" style="--photo-zoom:${product.imageScale || 1};">${modalGallery.length > 1 ? `<button type="button" class="gallery-arrow gallery-prev" aria-label="Previous product photo" onclick="stepModalGallery(-1)">‹</button><button type="button" class="gallery-arrow gallery-next" aria-label="Next product photo" onclick="stepModalGallery(1)">›</button><span class="gallery-count">${modalGalleryIndex + 1} / ${modalGallery.length}</span>` : ''}<span class="gallery-label">${escapeMarkup(sample.label)}</span>`;
+    container.innerHTML = `<img class="product-photo modal-gallery-photo gallery-transition-${modalGalleryDirection}" src="${escapeMarkup(sample.src)}" alt="${escapeMarkup(product.name)} — ${escapeMarkup(sample.label)}" style="--photo-zoom:${sample.scale};">${modalGallery.length > 1 ? `<button type="button" class="gallery-arrow gallery-prev" aria-label="Previous product photo" onclick="stepModalGallery(-1)">‹</button><button type="button" class="gallery-arrow gallery-next" aria-label="Next product photo" onclick="stepModalGallery(1)">Next →</button><span class="gallery-count">${modalGalleryIndex + 1} / ${modalGallery.length}</span>` : ''}<span class="gallery-label">${escapeMarkup(sample.label)}</span>`;
     container.ontouchstart = event => { container.dataset.touchStartX = String(event.changedTouches[0].screenX); };
     container.ontouchend = event => {
         const startX = Number(container.dataset.touchStartX);
@@ -338,6 +384,7 @@ function renderModalGallery(product) {
 
 function stepModalGallery(delta) {
     if (modalGallery.length < 2 || !currentProduct) return;
+    modalGalleryDirection = delta >= 0 ? 'next' : 'previous';
     modalGalleryIndex = (modalGalleryIndex + delta + modalGallery.length) % modalGallery.length;
     renderModalGallery(currentProduct);
 }
@@ -986,6 +1033,7 @@ function showToast(msg) {
    LEGAL & COOKIE SETTINGS
 ──────────────────────────────────────── */
 const POLICY_VERSION = '2026-10';
+const RETURN_POLICY_VERSION = '2026-10-26-15-day';
 const POLICY_CONTENT = {
     'privacy policy': {
         title: 'Privacy Policy',
@@ -998,6 +1046,42 @@ const POLICY_CONTENT = {
             <p>Information is stored by the services that operate the store and may be shared with delivery or email providers as needed to complete an order or send a requested message. We take reasonable steps to protect stored information.</p>
             <h3>Your choices</h3>
             <p>Contact us through the Contact Us page if you have a privacy question or want to request help with information associated with your order.</p>`
+    },
+    'return policy': {
+        title: 'Pynx Return & Refund Policy',
+        content: `<p>Thank you for shopping at Pynx! We want your shopping experience to be as seamless as possible. Please review our complete return and refund guidelines below.</p>
+            <h3>1. How long do I have to make a return?</h3>
+            <p>We gladly accept returns within 15 days of receipt for eligible items in brand-new condition. Return requests submitted after 15 days will not be processed.</p>
+            <h3>2. Non-returnable items</h3>
+            <p>For health, hygiene, and product safety reasons, the following categories cannot be returned, exchanged, or refunded:</p>
+            <ul>
+                <li><strong>Swimwear (bikinis):</strong> All bikini tops, bottoms, and sets are final sale and non-returnable.</li>
+                <li><strong>Free gifts and promotional items:</strong> Non-returnable depending on payment status.</li>
+                <li><strong>Sale and clearance items:</strong> Items explicitly marked as final sale or non-returnable.</li>
+            </ul>
+            <h3>3. Return requirements for returnable items (caps)</h3>
+            <p>Returnable items, such as Pynx caps, must meet all of these requirements:</p>
+            <ul>
+                <li>Items must be in new, unworn, unwashed, undamaged, and unaltered condition.</li>
+                <li>All original product tags and packaging must remain attached and intact.</li>
+                <li>Items will be inspected for signs of wear, stains, odors, or shape alteration.</li>
+                <li>Please ship caps back in a sturdy box to preserve their structure during transit.</li>
+            </ul>
+            <h3>4. Damaged or defective items</h3>
+            <p>If you receive a defective, damaged, or incorrect item:</p>
+            <ol>
+                <li>Contact us within 48 hours of delivery.</li>
+                <li>Provide your order number and clear unboxing video and photo proof showing the issue.</li>
+                <li>Once verified through quality inspection, we will arrange a replacement or refund at no extra cost.</li>
+            </ol>
+            <h3>5. How to initiate a return</h3>
+            <p>To start a return request for eligible products:</p>
+            <ol>
+                <li>Message us on Instagram or via email with your order number and reason for return.</li>
+                <li>Once authorized, ship the item back using a trackable shipping method.</li>
+                <li>Upon passing quality inspection, your refund or store credit will be processed.</li>
+            </ol>
+            <p>For assistance, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a> or message <a href="https://www.instagram.com/pynx.ph/" target="_blank" rel="noopener noreferrer">PYNX on Instagram</a>.</p>`
     },
     'terms of service': {
         title: 'Terms of Service',
@@ -1050,10 +1134,11 @@ function initPolicyPopups() {
         document.body.classList.remove('policy-modal-open');
         previousFocus?.focus();
     };
-    const openModal = policyKey => {
+    const openModal = (policyKey, checkoutRequired = false) => {
         const policy = POLICY_CONTENT[policyKey];
         if (!policy) return;
         activePolicy = policyKey;
+        modal.dataset.checkoutRequired = String(checkoutRequired);
         previousFocus = document.activeElement;
         modal.querySelector('#policy-modal-title').textContent = policy.title;
         modal.querySelector('#policy-modal-content').innerHTML = policy.content;
@@ -1074,6 +1159,7 @@ function initPolicyPopups() {
         document.body.classList.add('policy-modal-open');
         modal.querySelector('.policy-modal-close').focus();
     };
+    window.openPolicyModal = openModal;
 
     footerLinks.forEach(link => {
         const policyKey = link.textContent.trim().toLowerCase();
@@ -1087,15 +1173,23 @@ function initPolicyPopups() {
     modal.addEventListener('click', event => {
         if (event.target.closest('[data-policy-close]')) closeModal();
         if (event.target.closest('#policy-agree')) {
+            const agreedAt = new Date().toISOString();
             if (activePolicy === 'cookie settings') {
                 const optionalCookies = modal.querySelector('#policy-optional-cookies');
                 localStorage.setItem('pynx_optional_cookies', String(Boolean(optionalCookies?.checked)));
             } else {
                 const agreements = JSON.parse(localStorage.getItem('pynx_policy_agreements') || '{}');
-                agreements[activePolicy] = { version: POLICY_VERSION, agreedAt: new Date().toISOString() };
+                agreements[activePolicy] = {
+                    version: activePolicy === 'return policy' ? RETURN_POLICY_VERSION : POLICY_VERSION,
+                    agreedAt,
+                };
                 localStorage.setItem('pynx_policy_agreements', JSON.stringify(agreements));
             }
+            const checkoutRequired = modal.dataset.checkoutRequired === 'true';
             closeModal();
+            document.dispatchEvent(new CustomEvent('pynx:policy-agreed', {
+                detail: { policyKey: activePolicy, agreedAt, checkoutRequired },
+            }));
             showToast(activePolicy === 'cookie settings' ? 'Cookie preferences saved' : 'Your agreement has been recorded');
         }
     });

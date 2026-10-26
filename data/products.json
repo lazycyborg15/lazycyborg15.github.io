@@ -7,33 +7,45 @@
     "originalPrice": 370,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-blue-updated.png",
+    "image": "assets/caps/pynx-vintage-cap-blue-updated.png",
+    "images": [
+      "assets/caps/pynx-vintage-cap-blue-side.png",
+      "assets/caps/pynx-vintage-caps-all-colors-fit.png"
+    ],
     "bg": "#43566f",
     "desc": "Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.",
     "onSale": false
   },
   {
     "id": 2,
-      "name": "Vintage Washed Cotton Baseball Cap - Black",
+    "name": "Vintage Washed Cotton Baseball Cap - Black",
     "cat": "Headwear",
     "price": 370,
     "originalPrice": 370,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-black-updated.png",
+    "image": "assets/caps/pynx-vintage-cap-black-updated.png",
+    "images": [
+      "assets/caps/pynx-vintage-cap-black-side.png",
+      "assets/caps/pynx-vintage-caps-all-colors-fit.png"
+    ],
     "bg": "#1a1a1a",
     "desc": "Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.",
     "onSale": false
   },
   {
     "id": 3,
-      "name": "Vintage Washed Cotton Baseball Cap - Brown",
+    "name": "Vintage Washed Cotton Baseball Cap - Brown",
     "cat": "Headwear",
     "price": 370,
     "originalPrice": 370,
     "type": "cap",
     "emoji": "🧢",
-      "image": "assets/caps/pynx-vintage-cap-brown.jpeg",
+    "image": "assets/caps/pynx-vintage-cap-brown.jpeg",
+    "images": [
+      "assets/caps/pynx-vintage-cap-brown-side.png",
+      "assets/caps/pynx-vintage-caps-all-colors-fit.png"
+    ],
     "bg": "#50463f",
     "desc": "Vintage washed cotton cap featuring embroidered “BEYOND THE TREND” lettering.",
     "onSale": false
@@ -46,8 +58,13 @@
     "originalPrice": 489,
     "type": "bikini",
     "emoji": "👙",
-      "image": "assets/bikinis/pynx-star-bikini-set.png",
-      "imageScale": 1.35,
+    "image": "assets/bikinis/pynx-star-bikini-set.png",
+    "images": [
+      "assets/bikinis/pynx-star-bikini-bottom-detail.png",
+      "assets/bikinis/pynx-star-bikini-logo-detail.png",
+      "assets/bikinis/pynx-star-bikini-set-detail.png"
+    ],
+    "imageScale": 1.35,
     "bg": "#1a1a1a",
       "desc": "Black triangle bikini set with adjustable tie straps and signature Pynx star graphics.",
     "sizes": [
