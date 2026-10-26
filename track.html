@@ -18,24 +18,24 @@
         .track-section h3 { margin: 0 0 .8rem; font-size: 1rem; }
 
         /* Status header */
-        .track-hero { background: linear-gradient(180deg, #fde8e6 0%, #e6f7f5 45%, #fff 100%); padding: 1.4rem 1.25rem 1.6rem; margin-top: 0; }
+        .track-hero { background: var(--bg); padding: 1.4rem 1.25rem 1.6rem; margin-top: 0; }
         .track-hero h1 { margin: 0; font-size: 1.6rem; font-family: inherit; letter-spacing: 0; text-transform: none; color: #111; }
         .track-hero p { margin: .3rem 0 0; color: #4b5563; }
-        .track-hero p strong { color: #0d9488; }
+        .track-hero p strong { color: var(--ink); }
 
         /* Progress bar */
         .track-progress { position: relative; display: grid; grid-template-columns: repeat(8, minmax(90px, 1fr)); text-align: center; margin-top: 1.6rem; overflow-x: auto; padding-bottom: .5rem; }
         .track-progress::before, .track-progress .fill { content: ''; position: absolute; top: 15px; left: 6.25%; height: 6px; border-radius: 3px; transform: translateY(-50%); }
         .track-progress::before { width: 87.5%; background: #e5e7eb; }
-        .track-progress .fill { background: #99e0d8; }
+        .track-progress .fill { background: var(--border); }
         .progress-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; font-size: .7rem; color: #9ca3af; line-height: 1.2; padding: 0 .2rem; }
         .progress-step .dot { width: 12px; height: 12px; border-radius: 50%; background: #d1d5db; margin: 9px 0; position: relative; z-index: 1; }
         .progress-step > span:last-child { margin-top: .35rem; }
-        .progress-step.complete { color: #0d9488; }
-        .progress-step.complete .dot { background: #5ccfc3; }
-        .progress-step.current .dot { width: 30px; height: 30px; margin: 0; background: #0d9488; display: flex; align-items: center; justify-content: center; }
+        .progress-step.complete { color: var(--ink); }
+        .progress-step.complete .dot { background: var(--ink); }
+        .progress-step.current .dot { width: 30px; height: 30px; margin: 0; background: var(--ink); display: flex; align-items: center; justify-content: center; }
         .progress-step.current .dot svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .progress-step.current { color: #0d9488; font-weight: 600; }
+        .progress-step.current { color: var(--ink); font-weight: 600; }
 
         /* Recipient and items */
         .track-recipient { display: flex; gap: .7rem; align-items: flex-start; }
@@ -53,14 +53,14 @@
         .track-item .price small { display: block; color: #6b7280; }
         .track-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .45rem 0; color: #4b5563; font-size: .92rem; }
         .track-row strong { color: #111; }
-        .track-waybill { color: #0d9488; font-weight: 700; }
-        .copy-btn { background: none; border: 0; cursor: pointer; font-size: .8rem; color: #0d9488; font-weight: 700; padding: 0 0 0 .5rem; }
+        .track-waybill { color: var(--ink); font-weight: 700; }
+        .copy-btn { background: none; border: 0; cursor: pointer; font-size: .8rem; color: var(--ink); font-weight: 700; padding: 0 0 0 .5rem; }
 
         /* Map */
         .track-map-card { padding: 0; overflow: hidden; }
         #track-map { height: 300px; width: 100%; }
         .track-map-note { padding: .8rem 1.25rem; font-size: .85rem; color: #6b7280; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-        .track-map-note a { color: #0d9488; font-weight: 700; }
+        .track-map-note a { color: var(--ink); font-weight: 700; }
         .map-icon { font-size: 26px; line-height: 1; text-align: center; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
 
         /* Package updates timeline */
@@ -73,7 +73,7 @@
         .timeline time { font-size: .82rem; color: #4b5563; line-height: 1.35; text-align: left; }
         .timeline .marker { box-sizing: content-box; position: absolute; left: 77px; top: 0; width: 14px; height: 14px; border-radius: 50%; background: #d1d5db; border: 3px solid #fff; z-index: 1; }
         .timeline li.minor .marker { left: 82px; top: 5px; width: 10px; height: 10px; border: 0; }
-        .timeline li.latest .marker { background: #0d9488; }
+        .timeline li.latest .marker { background: var(--ink); }
         .timeline .title { font-weight: 700; color: #111; }
         .timeline li.minor .title { display: none; }
         .timeline .desc { color: #4b5563; font-size: .92rem; margin-top: .15rem; line-height: 1.4; }
@@ -82,7 +82,7 @@
         .track-contact { display: flex; justify-content: space-between; align-items: center; color: #111; text-decoration: none; padding: .35rem 0; }
         .track-form { display: grid; gap: .8rem; background: #fff; border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem; }
         .track-form input { padding: .8rem 1rem; border: 1px solid rgba(17,17,17,.2); border-radius: 8px; font: inherit; }
-        .track-error { color: #b91c1c; margin: 1rem 1.25rem 0; }
+        .track-error { color: var(--ink); margin: 1rem 1.25rem 0; }
         .track-cancel-order { margin-top: 1rem; min-height: 42px; }
         .track-cancel-dialog { width: min(420px, calc(100% - 2rem)); margin: auto; padding: 0; border: 0; border-radius: 12px; color: #111; box-shadow: 0 24px 70px rgba(0,0,0,.24); }
         .track-cancel-dialog::backdrop { background: rgba(17,17,17,.55); backdrop-filter: blur(3px); }
@@ -92,11 +92,92 @@
         .track-cancel-dialog-actions { display: flex; justify-content: flex-end; gap: .7rem; margin-top: 1.4rem; }
         .track-cancel-dialog-actions button { min-height: 44px; padding: .65rem 1rem; border-radius: 4px; font: inherit; cursor: pointer; }
         .track-cancel-dialog-keep { border: 1px solid #d1d5db; background: #fff; }
-        .track-cancel-dialog-confirm { background: #9f2d28; color: #fff; }
+        .track-cancel-dialog-confirm { background: var(--ink); color: var(--bg); }
         @media (max-width: 480px) {
             .track-cancel-dialog-content { padding: 1.25rem; }
             .track-cancel-dialog-actions { flex-direction: column-reverse; }
             .track-cancel-dialog-actions button { width: 100%; }
+        }
+
+        .track-wrap { width: min(100% - 3rem, 1280px); max-width: none; padding: 104px 0 3rem; }
+        .track-lookup { padding: 0 0 1rem; }
+        .track-lookup .section-eyebrow { margin: 0; color: var(--mid); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+        .track-lookup .section-title { margin: .15rem 0 0; font-family: inherit; font-size: clamp(1.6rem, 3vw, 2rem); letter-spacing: 0; line-height: 1.2; text-align: left; text-transform: none; }
+        .track-lookup .section-title::after { display: none; }
+        .track-lookup .track-intro { margin-top: .35rem; color: var(--mid); font-size: .9rem; }
+        .track-form { margin: .75rem 0 0 !important; padding: 1.25rem; border: 1px solid var(--border); border-radius: 0; background: var(--white); }
+        .track-form input { border-radius: 0; border-color: var(--border); }
+        .track-form .btn-primary { justify-self: start; }
+        .track-error { margin: .75rem 0 0; color: #8b1e1e; }
+        .track-dashboard { display: grid; grid-template-columns: minmax(270px, 320px) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+        #track-result .track-section { min-width: 0; margin: 0; padding: 1.1rem; border: 1px solid var(--border); border-radius: 0; background: var(--white); }
+        .track-order-panel, .track-main-column { display: grid; gap: 1.1rem; min-width: 0; }
+        #track-result .track-section h2, #track-result .track-section h3 { margin: 0; color: var(--ink); font-family: inherit; font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
+        .track-order-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; padding-bottom: .9rem; border-bottom: 1px solid var(--bg-alt); }
+        .track-order-heading p { margin: .2rem 0 0; color: var(--mid); font-size: .78rem; }
+        .track-status { display: inline-flex; align-items: center; padding: .25rem .55rem; border: 1px solid var(--border); background: var(--bg); color: var(--ink); font-size: .68rem; line-height: 1.3; white-space: nowrap; }
+        .track-recipient { padding: .85rem 0; border-bottom: 1px solid var(--bg-alt); }
+        .track-recipient .pin { color: var(--ink); }
+        .track-recipient strong { color: var(--ink); font-size: .82rem; }
+        .track-recipient span { color: var(--mid); font-size: .75rem; overflow-wrap: anywhere; }
+        .track-order-panel .timeline { margin-top: 1rem; }
+        .timeline li { grid-template-columns: 1fr; gap: .15rem; padding: 0 0 1rem 1.45rem; }
+        .timeline li::before { left: .34rem; top: .28rem; bottom: -.05rem; width: 1px; background: var(--border); }
+        .timeline li:first-child::before { top: .3rem; }
+        .timeline li:last-child::before { bottom: auto; height: .5rem; }
+        .timeline time { color: var(--mid); font-size: .68rem; text-align: left; }
+        .timeline .marker, .timeline li.minor .marker { left: 0; top: .15rem; width: .7rem; height: .7rem; border: 2px solid var(--white); background: var(--border); }
+        .timeline li.latest .marker { background: var(--ink); }
+        .timeline .title { color: var(--ink); font-size: .82rem; }
+        .timeline li.minor .title { display: block; }
+        .timeline .desc { color: var(--mid); font-size: .74rem; }
+        .timeline-note, .track-timeline-empty { color: var(--mid); font-size: .72rem; }
+        #track-result .track-map-card { padding: 0; overflow: hidden; }
+        #track-map { width: 100%; height: clamp(300px, 38vw, 440px); background: var(--bg-alt); }
+        .track-map-empty { min-height: 300px; padding: 2rem; display: flex; align-items: center; justify-content: center; background: var(--bg-alt); color: var(--mid); text-align: center; }
+        .track-map-note { padding: .7rem 1rem; color: var(--mid); font-size: .75rem; }
+        .track-map-note a, .track-waybill, .copy-btn { color: var(--ink); }
+        .track-map-note a, .track-waybill a { text-decoration: underline; }
+        .track-delivery-card { display: grid; gap: .9rem; }
+        .track-delivery-heading { display: flex; align-items: center; gap: .75rem; }
+        .track-delivery-icon { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; background: var(--bg); color: var(--ink); }
+        .track-delivery-icon svg { width: 1.3rem; height: 1.3rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .track-delivery-heading p { margin: .15rem 0 0; color: var(--mid); font-size: .74rem; }
+        .track-delivery-data { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--bg-alt); }
+        .track-delivery-data > div { min-width: 0; padding: .7rem .8rem; }
+        .track-delivery-data > div + div { border-left: 1px solid var(--bg-alt); }
+        .track-delivery-data span { display: block; color: var(--mid); font-size: .68rem; }
+        .track-delivery-data strong { display: block; margin-top: .15rem; color: var(--ink); font-size: .76rem; overflow-wrap: anywhere; }
+        .track-location-note { padding: .65rem .8rem; background: var(--bg); color: var(--mid); font-size: .72rem; }
+        .track-items-section, .track-details-section { margin-top: 1.25rem !important; }
+        .track-items-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1.25rem; margin-top: .5rem; }
+        .track-item { align-items: center; min-width: 0; padding: .5rem 0; }
+        .track-item .thumb { width: 56px; height: 56px; border: 1px solid var(--bg-alt); border-radius: 0; background: var(--bg); }
+        .track-item .name, .track-item .price { color: var(--ink); font-size: .78rem; }
+        .track-item .size, .track-item .price small { color: var(--mid); font-size: .7rem; }
+        .track-row { color: var(--mid); font-size: .8rem; }
+        .track-row strong { color: var(--ink); }
+        .track-waybill a { margin-left: .35rem; }
+        .track-contact { color: var(--ink); }
+        .track-cancel-dialog { border-radius: 0; }
+        .track-cancel-dialog-keep { border-radius: 0; border-color: var(--border); color: var(--ink); }
+        .track-cancel-dialog-confirm { border-radius: 0; background: var(--ink); color: var(--bg); }
+        @media (max-width: 760px) {
+            .track-wrap { width: min(100% - 2rem, 640px); padding-top: 92px; }
+            .track-dashboard { grid-template-columns: 1fr; }
+            .track-order-panel { order: 2; }
+            .track-main-column { order: 1; }
+        }
+        @media (max-width: 480px) {
+            .track-wrap { width: calc(100% - 1.25rem); padding-top: 82px; }
+            #track-result .track-section { padding: .9rem; }
+            #track-result .track-map-card { padding: 0; }
+            #track-map { height: 280px; }
+            .track-delivery-data { grid-template-columns: 1fr; }
+            .track-delivery-data > div + div { border-top: 1px solid var(--bg-alt); border-left: 0; }
+            .track-items-list { grid-template-columns: 1fr; }
+            .track-row { align-items: flex-start; }
+            .track-order-heading { flex-direction: column; }
         }
     </style>
 </head>
@@ -118,6 +199,7 @@
     <div id="track-lookup-head" class="track-lookup">
         <p class="section-eyebrow">Order Status</p>
         <h2 class="section-title">Track Your Order</h2>
+        <p class="track-intro">See the latest confirmed updates for your delivery.</p>
     </div>
 
     <div id="track-result"></div>
@@ -208,12 +290,17 @@
     // Straight lines show direction only; they are not the courier's road route.
     function renderMap(order) {
         const { destination, origin, current } = order.map || {};
-        const mapCard = document.getElementById('track-map-card');
+        const mapElement = document.getElementById('track-map');
+        const emptyState = document.getElementById('track-map-empty');
+        if (map) { map.remove(); map = null; }
         if (order.status === 'cancelled' || (!destination && !current)) {
-            mapCard.style.display = 'none';
+            mapElement.style.display = 'none';
+            emptyState.style.display = 'flex';
+            if (order.status === 'cancelled') emptyState.textContent = 'Map tracking is unavailable for cancelled orders.';
             return;
         }
-        if (map) { map.remove(); map = null; }
+        mapElement.style.display = 'block';
+        emptyState.style.display = 'none';
         map = L.map('track-map', { scrollWheelZoom: false });
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
@@ -223,7 +310,7 @@
             marker.bindTooltip(label, { permanent: open, direction: 'top', offset: [0, -14] });
             bounds.push([point.lat, point.lng]);
         };
-        const line = (a, b, dashed) => L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: dashed ? '#9ca3af' : '#0d9488', weight: 4, dashArray: dashed ? '8 8' : null }).addTo(map);
+        const line = (a, b, dashed) => L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: dashed ? '#9ca3af' : '#111111', weight: 4, dashArray: dashed ? '8 8' : null }).addTo(map);
 
         if (origin) add(origin, '🏬', 'PYNX ' + (order.map.originLabel || ''), false);
         if (destination) add(destination, '📍', order.status === 'delivered' ? 'Delivered here' : 'Delivery address', order.status !== 'shipped');
@@ -244,8 +331,6 @@
     }
 
     const STATUS_TITLES = { processing: 'Preparing your order', done: 'Waiting for courier', shipped: 'In transit', delivered: 'Order delivered', cancelled: 'Order cancelled' };
-    const PROGRESS_LABELS = ['Order placed', 'Waiting for courier', 'In transit', 'Order delivered'];
-    const BOX_ICON = '<svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3.3 7.5L12 12.5l8.7-5M12 22V12.5"/></svg>';
 
     const fmtDay = value => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const fmtClock = value => new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -308,47 +393,65 @@
                 <div class="price">₱${Number(item.price).toFixed(2)}<small>x${esc(item.qty)}</small></div>
             </div>`;
         }).join('');
-        const steps = TRACKING_LABELS.map((label, index) => {
-            const cls = index < level ? 'complete' : (index === level ? 'current complete' : '');
-            return `<div class="progress-step ${cls}"><span class="dot">${index === level ? BOX_ICON : ''}</span><span>${label}</span></div>`;
-        }).join('');
         const statusMessage = cancelled
-            ? `Cancelled on <strong>${esc(fmtDay(order.statusTimes?.cancelled))}</strong>`
+            ? `Cancelled on ${fmtDay(order.statusTimes?.cancelled)}`
             : delivered
-                ? `Delivered on <strong>${esc(fmtDay(order.statusTimes?.delivered))}</strong>`
+                ? `Delivered on ${fmtDay(order.statusTimes?.delivered)}`
                 : order.status === 'shipped'
                     ? 'Your package is on the way. Follow the tracking updates below.'
                     : 'Tracking updates will appear here as your order moves.';
-        const currentTitle = level >= 0 ? TRACKING_LABELS[level] : 'Order received';
+        const currentTitle = level >= 0 ? TRACKING_LABELS[level] : STATUS_TITLES[order.status] || 'Order received';
+        const statusTitle = cancelled ? STATUS_TITLES.cancelled : currentTitle;
+        const latestEvent = (order.events || [])[0];
+        const lastUpdated = latestEvent?.at || order.statusUpdatedAt || order.createdAt;
+        const currentLocation = order.currentLocation?.text || '';
         const waybill = order.trackingNumber
             ? `<div class="track-row"><span>J&amp;T tracking number</span><strong class="track-waybill">${esc(order.trackingNumber)} <a href="${esc(order.jntTrackingUrl || 'https://www.jtexpress.ph/')}" target="_blank" rel="noopener noreferrer">Track on J&amp;T</a></strong></div>`
             : '';
 
         resultEl.innerHTML = `
-            <section class="track-section track-hero">
-            <h1>${esc(cancelled ? STATUS_TITLES.cancelled : currentTitle)}</h1>
-            <p>${statusMessage}</p>
-            ${cancelled ? '' : `<div class="track-progress">
-                <span class="fill" style="width:${(Math.max(0, level) / 7) * 87.5}%"></span>
-                ${steps}
-            </div>`}
-                ${canCancelOrder(order) ? '<button type="button" class="btn-secondary track-cancel-order" id="track-cancel-order">Cancel this order</button>' : ''}
-            </section>
-            <section class="track-section track-map-card" id="track-map-card">
-                <div id="track-map"></div>
-                <div class="track-map-note" id="track-map-note"></div>
-            </section>
-            <section class="track-section">
-                <div class="track-recipient">
-                    <svg class="pin" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-                    <div><strong>${esc(recipient.name)} <span style="display:inline;font-weight:400;">${esc(recipient.phone)}</span></strong><span>${esc(recipient.address)}</span></div>
+            <div class="track-dashboard">
+                <aside class="track-order-panel">
+                    <section class="track-section">
+                        <div class="track-order-heading">
+                            <div><h2>Order #${esc(order.orderNumber)}</h2><p>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</p></div>
+                            <span class="track-status">${esc(statusTitle)}</span>
+                        </div>
+                        <div class="track-recipient">
+                            <svg class="pin" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+                            <div><strong>${esc(recipient.name)} <span style="display:inline;font-weight:400;">${esc(recipient.phone)}</span></strong><span>${esc(recipient.address)}</span></div>
+                        </div>
+                        <h3>Delivery updates</h3>
+                        ${(order.events || []).length ? `<ul class="timeline">${renderTimeline(order.events)}</ul><p class="timeline-note">Times shown in your local time zone</p>` : '<p class="track-timeline-empty">Tracking updates will appear here when available.</p>'}
+                    </section>
+                    ${canCancelOrder(order) ? '<button type="button" class="btn-secondary track-cancel-order" id="track-cancel-order">Cancel this order</button>' : ''}
+                </aside>
+                <div class="track-main-column">
+                    <section class="track-section track-map-card" id="track-map-card">
+                        <div id="track-map"></div>
+                        <div class="track-map-empty" id="track-map-empty" role="status">A confirmed package location will appear here when coordinates are available.</div>
+                        <div class="track-map-note" id="track-map-note"></div>
+                    </section>
+                    <section class="track-section track-delivery-card">
+                        <div class="track-delivery-heading">
+                            <span class="track-delivery-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7zM7 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></span>
+                            <div><h2>${esc(statusTitle)}</h2><p>${esc(statusMessage)}</p></div>
+                        </div>
+                        <div class="track-delivery-data">
+                            <div><span>Carrier</span><strong>${order.trackingNumber ? 'J&amp;T Express' : 'Not provided'}</strong></div>
+                            <div><span>Estimated delivery</span><strong>Not provided</strong></div>
+                            <div><span>Last update</span><strong>${lastUpdated ? esc(fmtDay(lastUpdated)) + ' · ' + esc(fmtClock(lastUpdated)) : 'Not available'}</strong></div>
+                        </div>
+                        ${currentLocation ? `<p class="track-location-note">Latest confirmed location: ${esc(currentLocation)}</p>` : ''}
+                    </section>
                 </div>
+            </div>
+            <section class="track-section track-items-section">
+                <h2>Items in this order</h2>
+                <div class="track-items-list">${items || '<p class="track-timeline-empty">No item details are available for this order.</p>'}</div>
             </section>
-            <section class="track-section">
-                <h3>PYNX</h3>
-                ${items}
-            </section>
-            <section class="track-section">
+            <section class="track-section track-details-section">
+                <h2>Order details</h2>
                 <div class="track-row"><span>Order number</span><strong>${esc(order.orderNumber)} <button type="button" class="copy-btn" id="copy-order">Copy</button></strong></div>
                 <div class="track-row"><span>Placed on</span><span>${esc(fmtDay(order.createdAt))}, ${esc(fmtClock(order.createdAt))}</span></div>
                 <div class="track-row"><span>Item subtotal</span><strong>₱${Number(order.subtotal || 0).toFixed(2)}</strong></div>
@@ -356,16 +459,8 @@
                 <div class="track-row"><span>Total to pay</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
                 <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
                 ${waybill}
-            </section>
-            <section class="track-section">
-                <h3>Track package</h3>
-                <ul class="timeline">${renderTimeline(order.events || [])}</ul>
-                <p class="timeline-note">Times shown in your local time zone</p>
-            </section>
-            <section class="track-section">
                 <a class="track-contact" href="/contact.html"><span>Contact us about this order</span><span aria-hidden="true">›</span></a>
             </section>`;
-        document.getElementById('track-lookup-head').style.display = 'none';
         formEl.style.display = 'none';
         errorEl.textContent = '';
         document.getElementById('copy-order').addEventListener('click', event => {
@@ -377,7 +472,10 @@
             renderMap(order);
         } catch (err) {
             console.error('Map failed to load:', err);
-            document.getElementById('track-map-card').style.display = 'none';
+            document.getElementById('track-map').style.display = 'none';
+            const mapEmpty = document.getElementById('track-map-empty');
+            mapEmpty.textContent = 'The map could not be loaded. Please try again later.';
+            mapEmpty.style.display = 'flex';
         }
     }
 
