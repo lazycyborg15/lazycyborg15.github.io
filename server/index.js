@@ -433,6 +433,99 @@ app.post('/api/customers/login', async (req, res) => {
   }
 });
 
+app.post('/api/customers/forgot-password', async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+  }
+  let base;
+  try {
+    base = new URL(process.env.SITE_URL || '');
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password
+      || (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('Invalid SITE_URL');
+  } catch (error) {
+    console.error('Password reset requires a valid SITE_URL:', error.message);
+    return res.status(503).json({ success: false, message: 'Password recovery is not configured. Please contact the store.' });
+  }
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.error('Password reset requires EMAIL_USER and EMAIL_PASS.');
+    return res.status(503).json({ success: false, message: 'Password recovery is not configured. Please contact the store.' });
+  }
+  const message = 'If an account exists for that email, a password reset link will be sent.';
+  try {
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const now = new Date();
+    const reset = { tokenHash, requestedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString() };
+    const customer = await withLock(async () => {
+      const customers = await loadCustomers();
+      const stored = customers.find(item => String(item.email || '').toLowerCase() === email);
+      if (!stored || Date.parse(stored.passwordReset?.requestedAt || '') > now.getTime() - 60 * 1000) return null;
+      if (StoreModel) {
+        const updated = await StoreModel.updateOne({
+          _id: 'customers',
+          data: { $elemMatch: { id: stored.id, $or: [
+            { 'passwordReset.requestedAt': { $exists: false } },
+            { 'passwordReset.requestedAt': { $lte: new Date(now.getTime() - 60 * 1000).toISOString() } },
+          ] } },
+        }, { $set: { 'data.$.passwordReset': reset } });
+        if (!updated.modifiedCount) return null;
+      } else {
+        stored.passwordReset = reset;
+        await saveCustomers(customers);
+      }
+      return stored;
+    });
+    if (customer) {
+      const resetUrl = new URL('reset-password.html', base.href.endsWith('/') ? base.href : `${base.href}/`);
+      resetUrl.hash = token;
+      const text = `Hi ${customer.firstName},\n\nUse this link to reset your PYNX password:\n${resetUrl.href}\n\nThis link expires in 30 minutes and can be used once. If you did not request it, ignore this email.\n\n- PYNX`;
+      const html = `<div style="font-family:Arial,sans-serif"><h1>PYNX</h1><p>Hi ${escapeHtml(customer.firstName)},</p><p>Use this link to reset your PYNX password:</p><p><a href="${escapeHtml(resetUrl.href)}">Reset your password</a></p><p>This link expires in 30 minutes and can be used once. If you did not request it, ignore this email.</p><p>- PYNX</p></div>`;
+      const result = await notifyCustomer(email, 'Reset your PYNX password', text, html);
+      if (!result.emailSent) console.error('Password reset email failed:', result.emailError);
+    }
+    return res.json({ success: true, message });
+  } catch (error) {
+    console.error('Password reset request failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to request a password reset. Please try again later.' });
+  }
+});
+
+app.post('/api/customers/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)
+    || typeof password !== 'string' || password.length < 6 || password.length > 200) {
+    return res.status(400).json({ success: false, message: 'Provide a valid reset link and a password between 6 and 200 characters.' });
+  }
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const now = new Date().toISOString();
+  try {
+    const changed = await withLock(async () => {
+      const credentials = hashPassword(password);
+      if (StoreModel) {
+        const result = await StoreModel.updateOne({
+          _id: 'customers',
+          data: { $elemMatch: { 'passwordReset.tokenHash': tokenHash, 'passwordReset.expiresAt': { $gt: now } } },
+        }, { $set: { 'data.$.passwordSalt': credentials.passwordSalt, 'data.$.passwordHash': credentials.passwordHash },
+          $unset: { 'data.$.passwordReset': '' } });
+        return result.modifiedCount === 1;
+      }
+      const customers = await loadCustomers();
+      const customer = customers.find(item => item.passwordReset?.tokenHash === tokenHash && item.passwordReset.expiresAt > now);
+      if (!customer) return false;
+      Object.assign(customer, credentials);
+      delete customer.passwordReset;
+      await saveCustomers(customers);
+      return true;
+    });
+    if (!changed) return res.status(400).json({ success: false, message: 'This reset link is invalid, expired, or has already been used.' });
+    return res.json({ success: true, message: 'Your password has been changed. You can now log in.' });
+  } catch (error) {
+    console.error('Password reset failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to reset your password. Please try again later.' });
+  }
+});
+
 // processing = being packed, done = packed and ready to ship, shipped = on the way.
 const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'cancelled'];
 

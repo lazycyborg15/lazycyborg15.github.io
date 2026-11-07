@@ -178,6 +178,7 @@
                     <input id="modal-login-email" type="email" placeholder="Email Address" required>
                     <label for="modal-login-password">Password</label>
                     <input id="modal-login-password" type="password" placeholder="Enter your password" required>
+                    <p class="auth-switch"><a href="reset-password.html">Forgot password?</a></p>
                     <p class="auth-note" id="modal-login-note">Log in to continue.</p>
                     <button type="submit" class="btn-primary form-submit">Log In</button>
                 </form>
@@ -298,7 +299,9 @@
                 }, 500);
             } catch (error) {
                 const accounts = JSON.parse(localStorage.getItem('pynx_local_accounts') || '[]');
-                const account = accounts.find(item => item.email.toLowerCase() === email.toLowerCase() && item.password === password);
+                const account = (error instanceof TypeError || error instanceof SyntaxError)
+                    ? accounts.find(item => (!item.id || String(item.id).startsWith('local-')) && item.email.toLowerCase() === email.toLowerCase() && item.password === password)
+                    : null;
                 if (account) {
                     localStorage.setItem('pynx_user', JSON.stringify({ ...account, password: undefined }));
                     localStorage.setItem('pynx_logged_in', 'true');
