@@ -6,7 +6,7 @@
     <title>Bikini | PYNX</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Helvetica+Neue:wght@300;400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=20261108-size-guides">
+    <link rel="stylesheet" href="css/styles.css?v=20261108-size-guide-popup">
 </head>
 <body class="shop-page bikinis-page">
 <header id="site-header">
@@ -162,7 +162,7 @@
             <div class="modal-name" id="modal-name"></div>
             <div class="modal-price" id="modal-price"></div>
             <div class="modal-desc" id="modal-desc"></div>
-            <a class="size-guide-link" id="size-guide-link" target="_blank" rel="noopener noreferrer" hidden>Size guide (opens in a new tab)</a>
+            <a class="size-guide-link" id="size-guide-link" onclick="openSizeGuide(event)" aria-haspopup="dialog" hidden>Size guide</a>
             <div class="size-label" id="size-label-el"></div>
             <div class="size-grid" id="size-grid"></div>
             <button class="btn-primary modal-add" onclick="addFromModal()">Add to Bag</button>
@@ -170,9 +170,17 @@
     </div>
 </div>
 
+<dialog class="size-guide-dialog" id="size-guide-dialog" aria-labelledby="size-guide-title">
+    <div class="size-guide-header">
+        <h2 id="size-guide-title">Size guide</h2>
+        <button type="button" class="size-guide-close" onclick="document.getElementById('size-guide-dialog').close()" aria-label="Close size guide">×</button>
+    </div>
+    <img id="size-guide-image" alt="">
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script src="js/config.js"></script>
-<script src="js/script.js?v=20261108-size-guides"></script>
+<script src="js/script.js?v=20261108-size-guide-popup"></script>
 </body>
 </html>

@@ -338,7 +338,7 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     sizeGuideLink.hidden = !sizeGuide;
     if (sizeGuide) {
         sizeGuideLink.href = sizeGuide;
-        sizeGuideLink.setAttribute('aria-label', `${p.type === 'cap' ? 'Cap' : 'Bikini'} size guide (opens in a new tab)`);
+        sizeGuideLink.setAttribute('aria-label', `${p.type === 'cap' ? 'Cap' : 'Bikini'} size guide`);
     } else {
         sizeGuideLink.removeAttribute('href');
         sizeGuideLink.removeAttribute('aria-label');
@@ -375,6 +375,24 @@ function openModal(id, preselectedSize = null, cartKey = null) {
 
     document.getElementById('modal-overlay').classList.add('show');
     document.getElementById('overlay').classList.add('show');
+}
+
+function openSizeGuide(event) {
+    event.preventDefault();
+    const link = document.getElementById('size-guide-link');
+    const dialog = document.getElementById('size-guide-dialog');
+    const image = document.getElementById('size-guide-image');
+    const title = link.getAttribute('aria-label');
+    document.getElementById('size-guide-title').textContent = title;
+    image.src = link.href;
+    image.alt = title;
+    dialog.onkeydown = keyEvent => {
+        if (keyEvent.key === 'Escape') {
+            keyEvent.preventDefault();
+            dialog.close();
+        }
+    };
+    dialog.showModal();
 }
 
 function renderModalGallery(product) {
