@@ -58,8 +58,9 @@ Netlify hosts the pages and runs the API as a function ([netlify/functions/api.j
    - Required for persistent data and admin access: `MONGODB_URI`, `ADMIN_PASSWORD`, `JWT_SECRET` (use a long random value).
    - Required for customer emails: `EMAIL_USER` and `EMAIL_PASS` (your Gmail address and Google app password), plus `SITE_URL` set to your public Netlify site URL.
      Order receipts and order/payment status emails are sent before the API confirms the email result. If a send fails, checkout tells the customer and the admin page records failed receipts and tracking emails for retry. Check the Netlify function logs and verify the Gmail app password if email is not sent.
-   - Shipping fees use the store defaults below. `SHIPPING_RATES_JSON` is optional and only needed to replace those defaults. Enter each product's packed weight in Admin → Products & Inventory.
-   - Checkout currently accepts cash on delivery only while GCash/card approval is pending. PayMongo credentials do not enable online payments in this release; configure them only when online payments are enabled in the application.
+   - Shipping fees are calculated per kilometre at ₱6/km from the store origin (Basak, Cebu City by default; override with `SHIPPING_ORIGIN="lat,lng"`). Enter each product's packed weight in Admin → Products & Inventory.
+   - Checkout accepts cash on delivery and, when PayMongo is configured, QRPH. GCash and card remain disabled until approval. Customers receive a payment-received email after an online payment is confirmed. Refunds are described to customers as taking 3–5 days.
+   - Vouchers are managed in `data/vouchers.json` (fields: `code`, `type` `percent` or `fixed`, `value`, `minSubtotal`, `expiresAt`, `maxUses`, `active`). Discounts apply to item subtotal only, not shipping. Usage is counted from non-cancelled orders. The sample `PYNX10` voucher is active; set `active` to `false` or remove it before launch.
    - Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`, `JNT_TRACKING_URL_TEMPLATE`, and `SHIP_FROM`.
 4. Redeploy, then open `<your-site-url>/api/health`; it should return `{"status":"ok"}`.
 5. Open `/admin.html` on the Netlify site and log in.
@@ -68,13 +69,12 @@ Netlify cannot keep files, so accounts, orders, reviews, messages, and product p
 
 #### Checkout, shipping and payment setup
 
-- **Shipping fees:** default rates are Cebu City ₱60; Lapu-Lapu City and Talisay City ₱80; other Cebu Province locations ₱100; other Visayas locations ₱100 for packed orders under 1,000 g and ₱160 at 1,000 g or more; Luzon and Mindanao ₱120 under 1,000 g and ₱180 at 1,000 g or more. These location/weight-based fees are quoted at checkout, added to the item subtotal, and included in PayMongo payment totals. Set each product's packed weight in grams in **Admin → Products & Inventory**; new products require a weight at creation.
-- **Custom shipping fees:** optionally set `SHIPPING_RATES_JSON` to a JSON array of zones to override the defaults. Each zone needs `name`, and one or more of `regions`, `provinces`, or `cities`, plus `rates` (weight brackets with `maxWeightGrams` and `fee` in PHP). A city zone can also specify `provinces` to limit that city match to a province. The server selects the most specific matching city, then province, then region.
+- **Shipping fees:** calculated at ₱6 per kilometre in a straight line from the store origin (Basak, Cebu City) to the delivery address, rounded up to the next whole kilometre. The fee is quoted at checkout, added to the item subtotal, and included in PayMongo payment totals. `SHIPPING_ORIGIN` (`"lat,lng"`) overrides the origin. Addresses are located with OpenStreetMap Nominatim; the server caches successful lookups in memory.
 - **PayMongo:** add `PAYMONGO_SECRET_KEY` and `PAYMONGO_WEBHOOK_SECRET` in Netlify. Register `<your-site-url>/api/webhooks/paymongo` in PayMongo for `checkout_session.payment.paid`, then copy the webhook signing secret to `PAYMONGO_WEBHOOK_SECRET`. Use test keys and a test webhook during testing; switch to live credentials before accepting real payments. Never put secret keys in site JavaScript or commit them.
 - **J&T tracking:** optionally set `JNT_TRACKING_URL_TEMPLATE` to J&T's tracking-page URL with `{trackingNumber}` where the waybill number belongs. If unset, the J&T button opens its Philippines homepage.
 - **Site links:** `SITE_URL` is the public Netlify site URL used in email links. `PUBLIC_API_URL` is not needed when Netlify hosts both the site and API.
 
-Checkout requires packed weights for all ordered products; it refuses an order if a product weight is missing. Cash on delivery is currently the only available payment method.
+Checkout does not require product weights for shipping. Cash on delivery and QRPH (when configured) are the available payment methods.
 
 ### Deploy on Render instead
 
@@ -89,8 +89,7 @@ Alternatively use the included Render blueprint.
 window.PYNX_API_URL = '<your-service-url>';
 ```
 
-Set `PUBLIC_API_URL` on the server to that same Render URL so unsubscribe links in product emails return to the API. Set `SITE_URL` to the public storefront URL for email links. Checkout uses the default location/weight shipping rates above; configure product packed weights, and configure `SHIPPING_RATES_JSON` only if you want to override those rates. For GCash/card, also configure `PAYMONGO_SECRET_KEY` / `PAYMONGO_WEBHOOK_SECRET`. The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, discounts, and newsletter subscriptions then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
-
+Set `PUBLIC_API_URL` on the server to that same Render URL so unsubscribe links in product emails return to the API. Set `SITE_URL` to the public storefront URL for email links. Checkout uses the per-kilometre shipping origin and rate above; configure product packed weights for inventory records. For QRPH, also configure `PAYMONGO_SECRET_KEY` / `PAYMONGO_WEBHOOK_SECRET`. The same API URL is used by the whole site. Customer accounts, contact messages, reviews, orders, product prices, discounts, and newsletter subscriptions then use the shared API instead of browser storage, so an order or review placed on one device appears in the admin page on any other device and triggers an email to the admins.
 Other settings: `JWT_SECRET`, `ADMIN_EMAIL`, `CORS_ORIGIN`, `NOTIFY_EMAIL` (comma-separated recipients) and `DATA_DIR`. Always set your own `ADMIN_EMAIL` / `ADMIN_PASSWORD` in production; never commit their values. Without `MONGODB_URI` the server writes JSON files to `DATA_DIR`, which is wiped on hosts with an ephemeral disk.
 
 ### Admin API reference

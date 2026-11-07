@@ -456,6 +456,7 @@
                 <div class="track-row"><span>Placed on</span><span>${esc(fmtDay(order.createdAt))}, ${esc(fmtClock(order.createdAt))}</span></div>
                 <div class="track-row"><span>Item subtotal</span><strong>₱${Number(order.subtotal || 0).toFixed(2)}</strong></div>
                 <div class="track-row"><span>Additional fee · Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>
+                ${Number(order.discount) > 0 ? `<div class="track-row"><span>Voucher ${esc(order.voucherCode || '')}</span><strong>-₱${Number(order.discount).toFixed(2)}</strong></div>` : ''}
                 <div class="track-row"><span>Total to pay</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
                 <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
                 ${waybill}

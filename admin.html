@@ -542,7 +542,7 @@
                             </div>
                             <div class="order-info-row">
                                 <label>Shipping:</label>
-                                <span>₱${Number(order.shippingFee || 0).toFixed(2)} · ${esc(order.shippingZone || 'Zone unavailable')} · ${Number(order.totalWeightGrams || 0)} g</span>
+                                <span>₱${Number(order.shippingFee || 0).toFixed(2)} · ${order.shippingDistanceKm !== undefined ? `${Number(order.shippingDistanceKm)} km × ₱6/km` : 'Distance unavailable'}</span>
                             </div>
                             <div class="order-info-row">
                                 <label>Payment:</label>

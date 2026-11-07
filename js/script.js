@@ -1079,7 +1079,7 @@ const POLICY_CONTENT = {
             <ol>
                 <li>Message us on Instagram or via email with your order number and reason for return.</li>
                 <li>Once authorized, ship the item back using a trackable shipping method.</li>
-                <li>Upon passing quality inspection, your refund or store credit will be processed.</li>
+                <li>Upon passing quality inspection, your refund or store credit will be processed. Approved refunds take 3–5 days to reach your account.</li>
             </ol>
             <p>For assistance, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a> or message <a href="https://www.instagram.com/pynx.ph/" target="_blank" rel="noopener noreferrer">PYNX on Instagram</a>.</p>`
     },
@@ -1091,7 +1091,7 @@ const POLICY_CONTENT = {
             <h3>Prices and product details</h3>
             <p>Prices are shown in Philippine pesos and may change before an order is placed. We make reasonable efforts to show accurate product details and availability.</p>
             <h3>Delivery</h3>
-            <p>Shipping fees are calculated from your delivery location and added to your checkout total. Use the order tracking link for status updates.</p>
+            <p>Shipping fees are ₱6 per kilometre from our Basak, Cebu City store to your delivery address and are added to your checkout total. Vouchers, when valid, reduce the item subtotal. Use the order tracking link for status updates.</p>
             <h3>Contact</h3>
             <p>For questions about an order, use the Contact Us page and include your order number where possible.</p>`
     },

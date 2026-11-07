@@ -65,7 +65,19 @@
                     <span>Additional fee · Shipping</span>
                     <strong id="checkout-shipping-fee">Enter your delivery address</strong>
                 </div>
-                <p class="checkout-address-note" id="checkout-shipping-note" role="status">Shipping is calculated from your province, city, and packed item weight, then added to your total.</p>
+                <p class="checkout-address-note" id="checkout-shipping-note" role="status">Shipping is ₱6 per kilometre from our Basak, Cebu City store to your address, added to your total.</p>
+                <div class="form-group checkout-voucher">
+                    <label for="checkout-voucher">VOUCHER CODE:</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="checkout-voucher" placeholder="Enter voucher code" autocomplete="off">
+                        <button type="button" id="checkout-voucher-apply">Apply</button>
+                    </div>
+                    <p class="checkout-address-note" id="checkout-voucher-status" role="status"></p>
+                </div>
+                <div class="checkout-summary-total" id="checkout-discount-row" style="display:none">
+                    <span>Voucher discount</span>
+                    <strong id="checkout-discount">₱0.00</strong>
+                </div>
                 <div class="checkout-summary-total">
                     <span>Total to pay</span>
                     <strong id="checkout-total">₱0.00</strong>
@@ -472,6 +484,17 @@
 
         let activeShippingQuote = null;
         let shippingQuoteTimer = null;
+        let appliedVoucherCode = '';
+
+        function setVoucherStatus(message) {
+            document.getElementById('checkout-voucher-status').textContent = message || '';
+        }
+
+        function setDiscount(amount) {
+            const value = Number(amount) || 0;
+            document.getElementById('checkout-discount-row').style.display = value > 0 ? '' : 'none';
+            document.getElementById('checkout-discount').textContent = `-₱${value.toFixed(2)}`;
+        }
 
         async function refreshShippingQuote() {
             const parts = addressParts();
@@ -486,23 +509,33 @@
                 note.textContent = 'Enter your province and city to calculate shipping. The fee is added to your total.';
                 const subtotal = Number(document.getElementById('checkout-subtotal').textContent.replace(/[^\d.]/g, '')) || 0;
                 document.getElementById('checkout-total').textContent = `₱${subtotal.toFixed(2)}`;
+                setDiscount(0);
                 return null;
             }
 
             fee.textContent = 'Calculating...';
-            note.textContent = 'Checking the delivery zone and package weight.';
+            note.textContent = 'Measuring the distance to your address.';
             try {
                 const response = await fetch(getApiUrl('/api/shipping/quote'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ addressParts: parts, items: apiItems }),
+                    body: JSON.stringify({ addressParts: parts, items: apiItems, voucherCode: appliedVoucherCode }),
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.message || 'Unable to calculate shipping.');
                 activeShippingQuote = data;
                 fee.textContent = `₱${Number(data.shippingFee).toFixed(2)}`;
-                note.textContent = `${data.zone} shipping · ${data.totalWeightGrams} g packed weight (included in total)`;
+                note.textContent = `${data.distanceKm} km × ₱6 per km from our Basak store (included in total)`;
                 document.getElementById('checkout-total').textContent = `₱${Number(data.total).toFixed(2)}`;
+                setDiscount(data.discount);
+                if (data.voucherError) {
+                    appliedVoucherCode = '';
+                    setVoucherStatus(data.voucherError);
+                } else if (data.voucherCode) {
+                    setVoucherStatus(`Voucher ${data.voucherCode} applied.`);
+                } else {
+                    setVoucherStatus('');
+                }
                 return data;
             } catch (error) {
                 fee.textContent = 'Unavailable';
@@ -517,11 +550,22 @@
             shippingQuoteTimer = setTimeout(refreshShippingQuote, 500);
         }
 
-        ['checkout-region', 'checkout-province', 'checkout-city', 'checkout-barangay'].forEach(id => {
-            document.getElementById(id).addEventListener('change', scheduleShippingQuote);
+        function applyVoucherFromInput() {
+            const input = document.getElementById('checkout-voucher');
+            appliedVoucherCode = input.value.trim().toUpperCase();
+            if (!appliedVoucherCode) setVoucherStatus('');
+            refreshShippingQuote();
+        }
+
+        document.getElementById('checkout-voucher-apply').addEventListener('click', applyVoucherFromInput);
+        document.getElementById('checkout-voucher').addEventListener('keydown', event => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            applyVoucherFromInput();
         });
-        ['checkout-postal', 'checkout-street'].forEach(id => {
-            document.getElementById(id).addEventListener('input', scheduleShippingQuote);
+
+        ['checkout-region', 'checkout-province', 'checkout-city', 'checkout-barangay', 'checkout-postal', 'checkout-street'].forEach(id => {
+            document.getElementById(id).addEventListener('change', scheduleShippingQuote);
         });
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -530,7 +574,7 @@
                 const selected = document.querySelector('input[name="payment-method"]:checked')?.value;
                 const messages = {
                     cash_on_hand: 'Pay the courier in cash when your order is delivered.',
-                    qrph: 'You will be redirected to PayMongo to scan a QRPH code and complete your payment securely.',
+                    qrph: 'You will be redirected to PayMongo to scan a QRPH code and complete your payment securely. Refunds, when approved, take 3–5 days to reach your account.',
                 };
                 paymentInfo.textContent = messages[selected] || '';
                 paymentInfo.hidden = !selected;
@@ -554,9 +598,6 @@
                     ? 'Choose QRPH to pay securely through PayMongo, or pay the courier in cash when your order is delivered.'
                     : 'Cash on delivery is currently the only available payment method. Pay the courier when your order is delivered.';
                 updatePaymentInfo();
-                if (!config.shippingConfigured) {
-                    document.getElementById('checkout-shipping-note').textContent = 'Shipping rates are not configured yet. Checkout will be available after the store adds its J&T zone rates.';
-                }
             } catch (error) {
                 console.error('Checkout configuration could not be loaded:', error);
             }
@@ -802,6 +843,7 @@
                         contact,
                         items,
                         paymentMethod,
+                        voucherCode: appliedVoucherCode,
                         returnPolicyAgreement: { version: '2026-10-26-15-day', agreedAt: returnPolicyAgreedAt },
                     }),
                 });

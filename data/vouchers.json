@@ -1,0 +1,11 @@
+[
+  {
+    "code": "PYNX10",
+    "type": "percent",
+    "value": 10,
+    "minSubtotal": 500,
+    "expiresAt": null,
+    "maxUses": null,
+    "active": true
+  }
+]

@@ -16,59 +16,13 @@ const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.en
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
 const ONLINE_PAYMENTS_ENABLED = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
-const DEFAULT_SHIPPING_ZONES = [
-  {
-    name: 'Cebu City',
-    provinces: ['Cebu'],
-    cities: ['Cebu City', 'Cebu'],
-    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 60 }],
-  },
-  {
-    name: 'Lapu-Lapu City / Talisay City',
-    provinces: ['Cebu'],
-    cities: ['Lapu-Lapu City', 'Lapu Lapu City', 'Talisay City'],
-    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 80 }],
-  },
-  {
-    name: 'Cebu Province',
-    provinces: ['Cebu'],
-    rates: [{ maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 100 }],
-  },
-  {
-    name: 'Other Visayas',
-    regions: ['Visayas'],
-    rates: [
-      { maxWeightGrams: 999, fee: 100 },
-      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 160 },
-    ],
-  },
-  {
-    name: 'Luzon',
-    regions: ['Luzon'],
-    rates: [
-      { maxWeightGrams: 999, fee: 120 },
-      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 180 },
-    ],
-  },
-  {
-    name: 'Mindanao',
-    regions: ['Mindanao'],
-    rates: [
-      { maxWeightGrams: 999, fee: 120 },
-      { maxWeightGrams: Number.MAX_SAFE_INTEGER, fee: 180 },
-    ],
-  },
-];
-let SHIPPING_ZONES = DEFAULT_SHIPPING_ZONES;
-if (process.env.SHIPPING_RATES_JSON) {
-  try {
-    SHIPPING_ZONES = JSON.parse(process.env.SHIPPING_RATES_JSON);
-    if (!Array.isArray(SHIPPING_ZONES)) throw new Error('Expected a JSON array of shipping zones.');
-  } catch (error) {
-    console.error('SHIPPING_RATES_JSON is invalid:', error.message);
-    SHIPPING_ZONES = [];
-  }
-}
+// Delivery fee is charged per kilometre of straight-line distance from the store.
+const SHIPPING_RATE_PER_KM = 6;
+// Store origin: Basak San Nicolas, Cebu City. Set SHIPPING_ORIGIN="lat,lng" to move it.
+const SHIPPING_ORIGIN = (() => {
+  const match = String(process.env.SHIPPING_ORIGIN || '').match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  return match ? { lat: Number(match[1]), lng: Number(match[2]) } : { lat: 10.2864738, lng: 123.8703173 };
+})();
 const TRACKING_STEPS = [
   { key: 'preparing_to_ship', title: 'Preparing to ship', requiresSpecificLocation: false },
   { key: 'packaged_for_pickup', title: 'Packaged for pickup', requiresSpecificLocation: false },
@@ -205,6 +159,7 @@ async function loadProductsWithPriceMigration() {
   });
 }
 const loadCustomers = () => loadCollection('customers');
+const loadVouchers = () => loadCollection('vouchers');
 const saveCustomers = customers => saveCollection('customers', customers);
 const loadReviews = () => loadCollection('reviews');
 const saveReviews = reviews => saveCollection('reviews', reviews);
@@ -482,6 +437,7 @@ const formatDateTime = iso => new Date(iso).toLocaleString('en-PH', { timeZone: 
 
 // Free OpenStreetMap geocoding. Usage policy allows about one request per second, so lookups are spaced out and failures are remembered briefly.
 const geocodeFailures = new Map();
+const geocodeHits = new Map();
 let shipFromCache = null;
 
 async function nominatimSearch(query) {
@@ -500,6 +456,7 @@ async function nominatimSearch(query) {
 async function geocode(address) {
   const text = String(address || '').trim();
   if (!text) return null;
+  if (geocodeHits.has(text)) return geocodeHits.get(text);
   const failedAt = geocodeFailures.get(text);
   if (failedAt && Date.now() - failedAt < 10 * 60 * 1000) return null;
 
@@ -513,7 +470,10 @@ async function geocode(address) {
     if (Date.now() > deadline) break;
     try {
       const point = await nominatimSearch(candidates[index]);
-      if (point) return point;
+      if (point) {
+        geocodeHits.set(text, point);
+        return point;
+      }
     } catch (err) {
       console.warn('Geocoding failed:', err.message);
       hadError = true;
@@ -521,6 +481,21 @@ async function geocode(address) {
   }
   if (!hadError) geocodeFailures.set(text, Date.now());
   return null;
+}
+
+// Straight-line distance in kilometres between two lat/lng points.
+function haversineKm(a, b) {
+  const toRadians = degrees => degrees * Math.PI / 180;
+  const dLat = toRadians(b.lat - a.lat);
+  const dLng = toRadians(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(a.lat)) * Math.cos(toRadians(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+// Finds the customer's delivery point, used for the per-km shipping fee.
+async function deliveryPoint(addressParts) {
+  const text = [addressParts.street, addressParts.barangay, addressParts.city, addressParts.province].filter(Boolean).join(', ');
+  return geocode(text);
 }
 
 async function shipFromPoint() {
@@ -666,6 +641,40 @@ async function sendPaymentStatusEmail(order) {
   return result;
 }
 
+async function sendOnlinePaymentReceivedEmail(order) {
+  const number = orderNumber(order);
+  const method = order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'card' ? 'card' : 'QRPH';
+  const subject = `Payment received for your PYNX order ${number}`;
+  const refundNote = 'If a refund is approved, it takes 3–5 days to reach your account.';
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    `We have received your ${method} payment for order ${number}. Thank you!`,
+    '',
+    `Amount paid: PHP ${Number(order.total).toFixed(2)}`,
+    `Payment method: ${method}`,
+    'Payment status: Paid',
+    '',
+    refundNote,
+    '',
+    '- PYNX',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>We have received your ${escapeHtml(method)} payment for order <strong>${escapeHtml(number)}</strong>. Thank you!</p><p><strong>Amount paid:</strong> PHP ${Number(order.total).toFixed(2)}<br><strong>Payment method:</strong> ${escapeHtml(method)}<br><strong>Payment status:</strong> Paid</p><p>${escapeHtml(refundNote)}</p><p>- PYNX</p></div>`;
+  const result = await notifyCustomer(String(order.email || '').trim(), subject, text, html);
+  await withLock(async () => {
+    const orders = await loadOrders();
+    const stored = orders.find(item => item.id === order.id);
+    if (!stored) return;
+    stored.paymentEmail = {
+      sent: Boolean(result.emailSent),
+      error: result.emailError || null,
+      at: new Date().toISOString(),
+    };
+    await saveOrders(orders);
+  });
+  return result;
+}
+
 async function sendPendingPaymentEmail(order, checkoutUrl) {
   const number = orderNumber(order);
   const subject = `Payment pending for your PYNX order ${number}`;
@@ -776,6 +785,8 @@ function publicOrder(order, map = {}) {
     paymentStatus: order.paymentStatus || 'pending',
     subtotal: Number(order.subtotal ?? (Number(order.total) - Number(order.shippingFee || 0))) || 0,
     shippingFee: Number(order.shippingFee) || 0,
+    discount: Number(order.discount) || 0,
+    voucherCode: order.voucherCode || null,
     currentLocation: current ? { text: current.text, updatedAt: current.updatedAt } : null,
     map: {
       destination: map.destination || null,
@@ -819,6 +830,7 @@ function receiptEmail(order, link) {
     ...(lines.map(l => `${l.name}${l.size ? ` / ${l.size}` : ''} x${l.qty} - PHP ${l.lineTotal.toFixed(2)}`)),
     '',
     `Item subtotal: PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}`,
+    ...(order.discount > 0 ? [`Voucher ${order.voucherCode} discount: -PHP ${Number(order.discount).toFixed(2)}`] : []),
     `Additional fee (shipping): PHP ${Number(order.shippingFee || 0).toFixed(2)}`,
     `Total to pay: PHP ${order.total.toFixed(2)}`,
     `Shipping address: ${order.address}`,
@@ -838,7 +850,7 @@ function receiptEmail(order, link) {
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
 <p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
 <p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
-<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
+<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr>${order.discount > 0 ? `<tr><td colspan="2" style="padding:10px 0">Voucher ${escapeHtml(order.voucherCode)}</td><td style="padding:10px 0;text-align:right">-PHP ${Number(order.discount).toFixed(2)}</td></tr>` : ''}<tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
 <p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
 <p>- PYNX</p></div>`;
@@ -863,10 +875,6 @@ function cleanAddressParts(parts) {
 
 const formatAddressParts = parts => [parts.street, parts.barangay, parts.city, parts.province, parts.postalCode, parts.region].filter(Boolean).join(', ');
 
-function normalizeLocation(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-}
-
 function cleanProductImages(value) {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || value.length > 8) return null;
@@ -875,41 +883,21 @@ function cleanProductImages(value) {
   return [...new Set(images)];
 }
 
-function shippingQuote(addressParts, items, products) {
-  if (!SHIPPING_ZONES.length) {
-    return { error: 'Shipping rates are not configured yet. Please contact the store before ordering.' };
+function shippingQuote(items, products, destination) {
+  if (!destination) {
+    return { error: "We couldn't find your address on the map. Please check the street, barangay, city, and province." };
   }
-  const province = normalizeLocation(addressParts.province);
-  const city = normalizeLocation(addressParts.city);
-  const region = normalizeLocation(addressParts.region);
-  const names = value => Array.isArray(value) ? value.map(normalizeLocation) : [];
-  const cityZone = SHIPPING_ZONES.find(candidate => {
-    const provinces = Array.isArray(candidate.provinces) ? candidate.provinces.map(normalizeLocation) : [];
-    const cities = names(candidate.cities);
-    return cities.includes(city) && (!provinces.length || provinces.includes(province));
-  });
-  const provinceZone = SHIPPING_ZONES.find(candidate =>
-    !names(candidate.cities).length && names(candidate.provinces).includes(province)
-  );
-  const regionZone = SHIPPING_ZONES.find(candidate => names(candidate.regions).includes(region));
-  const zone = cityZone || provinceZone || regionZone;
-  if (!zone || !Array.isArray(zone.rates) || !zone.rates.length) {
-    return { error: `We do not have a shipping rate for ${addressParts.city}, ${addressParts.province} yet.` };
-  }
-  let totalWeightGrams = 0;
+  // Distances are rounded up to the next whole kilometre.
+  const distanceKm = Math.ceil(haversineKm(SHIPPING_ORIGIN, destination));
   let subtotal = 0;
   const normalizedItems = [];
   for (const item of items) {
     const product = products.find(candidate => String(candidate.id) === String(item.product?.id));
     if (!product) return { error: `${item.product?.name || 'A product'} is no longer available. Please refresh your cart.` };
-    if (!Number.isInteger(product.weightGrams) || product.weightGrams <= 0) {
-      return { error: `Packed weight has not been set for ${product.name}. Please contact the store.` };
-    }
     const quantity = Number(item.qty);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
       return { error: 'Order quantities must be whole numbers between 1 and 99.' };
     }
-    totalWeightGrams += product.weightGrams * quantity;
     subtotal += Number(product.price) * quantity;
     normalizedItems.push({
       product: { ...product },
@@ -918,21 +906,33 @@ function shippingQuote(addressParts, items, products) {
     });
   }
 
-  const rate = zone.rates
-    .filter(candidate => Number.isInteger(candidate.maxWeightGrams) && candidate.maxWeightGrams >= totalWeightGrams)
-    .sort((a, b) => a.maxWeightGrams - b.maxWeightGrams)[0];
-  if (!rate || !Number.isFinite(rate.fee) || rate.fee < 0) {
-    return { error: `No shipping rate covers this ${totalWeightGrams} g package for ${zone.name || 'this zone'}. Please contact the store.` };
-  }
-
+  const shippingFee = distanceKm * SHIPPING_RATE_PER_KM;
   return {
-    zone: String(zone.name || 'Shipping zone').slice(0, 80),
-    shippingFee: Number(rate.fee),
-    totalWeightGrams,
+    distanceKm,
+    shippingFee,
     subtotal,
-    total: subtotal + Number(rate.fee),
     items: normalizedItems,
   };
+}
+
+// Vouchers come from data/vouchers.json. Usage is counted from orders that were not cancelled.
+function applyVoucher(rawCode, subtotal, vouchers, orders) {
+  const code = String(rawCode || '').trim().toUpperCase();
+  if (!code) return { code: '', discount: 0 };
+  const voucher = (Array.isArray(vouchers) ? vouchers : [])
+    .find(item => String(item.code || '').trim().toUpperCase() === code);
+  if (!voucher || voucher.active === false) return { error: 'That voucher code is not valid.' };
+  if (voucher.expiresAt && new Date(voucher.expiresAt).getTime() < Date.now()) return { error: 'This voucher has expired.' };
+  const minSubtotal = Number(voucher.minSubtotal) || 0;
+  if (subtotal < minSubtotal) return { error: `This voucher needs a subtotal of at least ₱${minSubtotal.toFixed(2)}.` };
+  if (Number.isInteger(voucher.maxUses)) {
+    const used = orders.filter(order => order.voucherCode === code && order.status !== 'cancelled').length;
+    if (used >= voucher.maxUses) return { error: 'This voucher has already been used up.' };
+  }
+  const value = Number(voucher.value) || 0;
+  const raw = voucher.type === 'percent' ? subtotal * value / 100 : value;
+  const discount = Math.round(Math.min(Math.max(raw, 0), subtotal) * 100) / 100;
+  return { code, discount };
 }
 
 // Pin placed by the customer on the checkout map.
@@ -973,7 +973,7 @@ async function sendOrderReceipt(order, req) {
 async function createPayMongoCheckout(order, req) {
   if (!PAYMONGO_SECRET_KEY) throw new Error('Online payments are not configured. Please choose cash on delivery or contact the store.');
   const base = siteBaseUrl(req);
-  const lineItems = order.items.map(item => {
+  const itemLines = order.items.map(item => {
     const image = String(item.product.image || '').trim();
     const imageUrl = /^https?:\/\//i.test(image)
       ? image
@@ -988,6 +988,15 @@ async function createPayMongoCheckout(order, req) {
       ...(imageUrl ? { images: [imageUrl] } : {}),
     };
   });
+  // PayMongo has no negative line items, so a voucher is shown as one discounted items line.
+  const lineItems = order.discount > 0
+    ? [{
+      currency: 'PHP',
+      amount: Math.round((Number(order.subtotal) - Number(order.discount)) * 100),
+      name: `Items (voucher ${order.voucherCode} applied)`.slice(0, 100),
+      quantity: 1,
+    }]
+    : itemLines;
   if (order.shippingFee > 0) {
     lineItems.push({
       currency: 'PHP',
@@ -1051,23 +1060,28 @@ app.post('/api/shipping/quote', async (req, res) => {
     region: clean(suppliedAddress.region, 40),
     province: clean(suppliedAddress.province),
     city: clean(suppliedAddress.city),
-    barangay: '',
+    barangay: clean(suppliedAddress.barangay),
     postalCode: '',
-    street: '',
+    street: clean(suppliedAddress.street),
   };
   if (!addressParts.province || !addressParts.city || !Array.isArray(req.body.items) || req.body.items.length === 0) {
     return res.status(400).json({ success: false, message: 'Enter your province and city and add an item to your cart.' });
   }
   try {
-    const quote = shippingQuote(addressParts, req.body.items, await loadProducts());
+    const destination = cleanPoint(req.body.location) || await deliveryPoint(addressParts);
+    const quote = shippingQuote(req.body.items, await loadProducts(), destination);
     if (quote.error) return res.status(422).json({ success: false, message: quote.error });
+    const voucher = applyVoucher(req.body.voucherCode, quote.subtotal, await loadVouchers(), await loadOrders());
+    const discount = voucher.discount || 0;
     return res.json({
       success: true,
-      zone: quote.zone,
+      distanceKm: quote.distanceKm,
       shippingFee: quote.shippingFee,
-      totalWeightGrams: quote.totalWeightGrams,
       subtotal: quote.subtotal,
-      total: quote.total,
+      voucherCode: voucher.code || '',
+      voucherError: voucher.error || '',
+      discount,
+      total: quote.subtotal - discount + quote.shippingFee,
     });
   } catch (error) {
     console.error('Shipping quote failed:', error);
@@ -1080,7 +1094,6 @@ app.get('/api/checkout/config', (req, res) => {
   return res.json({
     success: true,
     onlinePaymentsEnabled: ONLINE_PAYMENTS_ENABLED,
-    shippingConfigured: SHIPPING_ZONES.length > 0,
   });
 });
 
@@ -1149,6 +1162,7 @@ app.post('/api/webhooks/paymongo', async (req, res) => {
       console.error('PayMongo paid event did not match an order, session, amount, or currency.');
       return res.status(400).json({ success: false, message: 'Payment does not match an order.' });
     }
+    if (!order.paymentEmail?.sent) await sendOnlinePaymentReceivedEmail(order);
     if (!order.receiptEmail?.sent) await sendOrderReceipt(order, req);
     return res.json({ success: true });
   } catch (error) {
@@ -1182,6 +1196,7 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Order quantities must be whole numbers greater than zero.' });
   }
 
+  const destination = cleanPoint(req.body.location) || await deliveryPoint(addressParts);
   const order = {
     id: crypto.randomUUID(),
     firstName: clean(firstName, 80),
@@ -1192,7 +1207,7 @@ app.post('/api/orders', async (req, res) => {
       version: RETURN_POLICY_VERSION,
       agreedAt: new Date(returnPolicyAgreedAt).toISOString(),
     },
-    ...(cleanPoint(req.body.location) ? { destination: cleanPoint(req.body.location) } : {}),
+    ...(destination ? { destination } : {}),
     email: String(email).trim().toLowerCase(),
     contact: clean(contact, 32),
     inventoryReservations: [],
@@ -1207,7 +1222,7 @@ app.post('/api/orders', async (req, res) => {
   try {
     const result = await withLock(async () => {
       const products = await loadProducts();
-      const quote = shippingQuote(addressParts, items, products);
+      const quote = shippingQuote(items, products, destination);
       if (quote.error) return { error: quote.error };
       const quantities = new Map();
       for (const item of items) {
@@ -1224,12 +1239,18 @@ app.post('/api/orders', async (req, res) => {
         }
       }
 
+      const existingOrders = await loadOrders();
+      const voucher = applyVoucher(req.body.voucherCode, quote.subtotal, await loadVouchers(), existingOrders);
+      if (voucher.error) return { error: voucher.error };
+      const discount = voucher.discount || 0;
+
       order.items = quote.items;
       order.subtotal = quote.subtotal;
       order.shippingFee = quote.shippingFee;
-      order.total = quote.total;
-      order.shippingZone = quote.zone;
-      order.totalWeightGrams = quote.totalWeightGrams;
+      order.discount = discount;
+      if (voucher.code) order.voucherCode = voucher.code;
+      order.total = quote.subtotal - discount + quote.shippingFee;
+      order.shippingDistanceKm = quote.distanceKm;
       const originalProducts = products.map(product => ({ ...product }));
       quantities.forEach((quantity, productId) => {
         const product = products.find(candidate => String(candidate.id) === productId);
@@ -1309,7 +1330,7 @@ app.post('/api/orders', async (req, res) => {
   const [adminNotification, receiptResult] = await Promise.all([
     notifyAdmins(
       `New cash-on-delivery order from ${firstName} ${lastName}`,
-      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nItem subtotal: PHP ${order.subtotal.toFixed(2)}\nAdditional fee (shipping): PHP ${order.shippingFee.toFixed(2)}\nTotal to pay: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
+      `New order details:\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nContact: ${contact}\nAddress: ${address}\n\nItems:\n${itemLine}\n\nItem subtotal: PHP ${order.subtotal.toFixed(2)}${order.discount > 0 ? `\nVoucher ${order.voucherCode} discount: -PHP ${order.discount.toFixed(2)}` : ''}\nAdditional fee (shipping): PHP ${order.shippingFee.toFixed(2)}\nTotal to pay: PHP ${order.total.toFixed(2)}\nPlaced: ${order.createdAt}\n\nView it in the admin page.`
     ),
     receiptPromise,
   ]);
