@@ -16,7 +16,8 @@ const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.en
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
 const ONLINE_PAYMENTS_ENABLED = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
-const CEBU_SHIPPING_RATE_PER_KM = 0.75;
+const CEBU_CITY_SHIPPING_RATE_PER_KM = 1.49;
+const CEBU_PROVINCE_SHIPPING_RATE_PER_KM = 0.78;
 const FLAT_SHIPPING_FEES = {
   visayas: 155,
   luzon: 180,
@@ -918,6 +919,13 @@ function shippingArea(addressParts) {
   return null;
 }
 
+function cebuShippingRate(city) {
+  const normalized = String(city || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ['cityofcebu', 'cebucity', 'cebu'].includes(normalized)
+    ? CEBU_CITY_SHIPPING_RATE_PER_KM
+    : CEBU_PROVINCE_SHIPPING_RATE_PER_KM;
+}
+
 function shippingQuote(items, products, destination, addressParts) {
   const area = shippingArea(addressParts);
   if (!area) return { error: 'Please select a supported delivery region and province.' };
@@ -943,7 +951,7 @@ function shippingQuote(items, products, destination, addressParts) {
   }
 
   const shippingFee = area === 'cebu'
-    ? Math.round(distanceKm * CEBU_SHIPPING_RATE_PER_KM * 100) / 100
+    ? Math.round(distanceKm * cebuShippingRate(addressParts.city) * 100) / 100
     : FLAT_SHIPPING_FEES[area];
   return {
     shippingArea: area,

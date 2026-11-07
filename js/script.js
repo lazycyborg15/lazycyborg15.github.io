@@ -1094,7 +1094,7 @@ const POLICY_CONTENT = {
             <h3>Prices and product details</h3>
             <p>Prices are shown in Philippine pesos and may change before an order is placed. We make reasonable efforts to show accurate product details and availability.</p>
             <h3>Delivery</h3>
-            <p>Shipping fees are ₱6 per kilometre from our Basak, Cebu City store to your delivery address and are added to your checkout total. Vouchers, when valid, reduce the item subtotal. Use the order tracking link for status updates.</p>
+            <p>Shipping is ₱1.49 per kilometre within Cebu City and ₱0.78 per kilometre elsewhere in Cebu Province, measured in a straight line from our Basak store and rounded up to the next whole kilometre. Shipping to other Visayas locations is ₱155, to Luzon and NCR ₱180, and to Mindanao ₱175. Shipping is added to your checkout total. Vouchers, when valid, reduce the item subtotal. Use the order tracking link for status updates.</p>
             <h3>Contact</h3>
             <p>For questions about an order, use the Contact Us page and include your order number where possible.</p>`
     },
