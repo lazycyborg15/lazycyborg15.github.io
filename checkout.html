@@ -62,10 +62,10 @@
                     <strong id="checkout-subtotal">₱0.00</strong>
                 </div>
                 <div class="checkout-summary-total">
-                    <span>Additional fee · Shipping</span>
+                    <span>Shipping fee</span>
                     <strong id="checkout-shipping-fee">Enter your delivery address</strong>
                 </div>
-                <p class="checkout-address-note" id="checkout-shipping-note" role="status">Shipping is ₱6 per kilometre from our Basak, Cebu City store to your address, added to your total.</p>
+                <p class="checkout-address-note" id="checkout-shipping-note" role="status"></p>
                 <div class="form-group checkout-voucher">
                     <label for="checkout-voucher">VOUCHER CODE:</label>
                     <div style="display:flex;gap:8px">
@@ -525,7 +525,7 @@
                 if (!response.ok || !data.success) throw new Error(data.message || 'Unable to calculate shipping.');
                 activeShippingQuote = data;
                 fee.textContent = `₱${Number(data.shippingFee).toFixed(2)}`;
-                note.textContent = `${data.distanceKm} km × ₱6 per km from our Basak store (included in total)`;
+                note.textContent = '';
                 document.getElementById('checkout-total').textContent = `₱${Number(data.total).toFixed(2)}`;
                 setDiscount(data.discount);
                 if (data.voucherError) {
@@ -844,7 +844,7 @@
                         items,
                         paymentMethod,
                         voucherCode: appliedVoucherCode,
-                        returnPolicyAgreement: { version: '2026-10-26-15-day', agreedAt: returnPolicyAgreedAt },
+                        returnPolicyAgreement: { version: '2026-11-07-cancellation-refunds', agreedAt: returnPolicyAgreedAt },
                     }),
                 });
 
@@ -874,8 +874,10 @@
                 } else {
                     console.error('Could not clear purchased items because the cart helper is unavailable.');
                 }
+                const checkoutIntro = document.querySelector('.checkout-intro');
+                if (checkoutIntro) checkoutIntro.style.display = 'none';
                 const checkoutLayout = document.querySelector('.checkout-layout');
-                if (checkoutLayout) checkoutLayout.style.minHeight = `${checkoutLayout.scrollHeight}px`;
+                if (checkoutLayout) checkoutLayout.classList.add('checkout-complete');
                 document.getElementById('checkout-form').style.display = 'none';
                 document.getElementById('checkout-email-note').textContent = result.receiptEmailSent
                     ? 'Thanks for your order. We emailed your receipt and confirmation. Please check your spam folder if it is not in your inbox. Pay the courier when it arrives; you can track your order below.'
@@ -990,6 +992,6 @@
         </div>
     </aside>
 
-    <script src="js/script.js?v=20261026-catalog-payments"></script>
+    <script src="js/script.js?v=20261107-product-sales"></script>
 </body>
 </html>

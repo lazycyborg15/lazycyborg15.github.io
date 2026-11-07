@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const RETURN_POLICY_VERSION = '2026-10-26-15-day';
+const RETURN_POLICY_VERSION = '2026-11-07-cancellation-refunds';
 const PORT = process.env.PORT || 5000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const SEED_DIR = path.join(__dirname, '../data');
@@ -16,8 +16,13 @@ const IS_SERVERLESS = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.en
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
 const ONLINE_PAYMENTS_ENABLED = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
-// Delivery fee is charged per kilometre of straight-line distance from the store.
-const SHIPPING_RATE_PER_KM = 6;
+const CEBU_SHIPPING_RATE_PER_KM = 0.75;
+const FLAT_SHIPPING_FEES = {
+  visayas: 155,
+  luzon: 180,
+  ncr: 180,
+  mindanao: 175,
+};
 // Store origin: Basak San Nicolas, Cebu City. Set SHIPPING_ORIGIN="lat,lng" to move it.
 const SHIPPING_ORIGIN = (() => {
   const match = String(process.env.SHIPPING_ORIGIN || '').match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
@@ -192,6 +197,7 @@ function verifyPassword(password, customer) {
 
 app.use(cors());
 app.use(express.json({
+  limit: '2mb',
   verify: (req, res, buffer) => {
     req.rawBody = Buffer.from(buffer);
   },
@@ -675,6 +681,23 @@ async function sendOnlinePaymentReceivedEmail(order) {
   return result;
 }
 
+async function sendRefundTransferLinkEmail(order, transferLink) {
+  const number = orderNumber(order);
+  const subject = `Refund details for your PYNX order ${number}`;
+  const text = [
+    `Hi ${order.firstName},`,
+    '',
+    `A refund has been initiated for your PYNX order ${number}.`,
+    '',
+    `To receive the refund, securely enter your bank or e-wallet details using this PayMongo link: ${transferLink}`,
+    'This link expires in 3 days. PYNX will never ask you to send your bank details by email.',
+    '',
+    '- PYNX',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111"><h1>PYNX</h1><p>Hi ${escapeHtml(order.firstName)},</p><p>A refund has been initiated for your PYNX order <strong>${escapeHtml(number)}</strong>.</p><p>To receive the refund, securely enter your bank or e-wallet details using PayMongo's link:</p><p style="margin:24px 0"><a href="${escapeHtml(transferLink)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Continue to PayMongo</a></p><p>This link expires in 3 days. PYNX will never ask you to send your bank details by email.</p><p>- PYNX</p></div>`;
+  return notifyCustomer(String(order.email || '').trim(), subject, text, html);
+}
+
 async function sendPendingPaymentEmail(order, checkoutUrl) {
   const number = orderNumber(order);
   const subject = `Payment pending for your PYNX order ${number}`;
@@ -883,18 +906,31 @@ function cleanProductImages(value) {
   return [...new Set(images)];
 }
 
-function shippingQuote(items, products, destination) {
-  if (!destination) {
+function shippingArea(addressParts) {
+  const normalize = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const region = normalize(addressParts.region);
+  const province = normalize(addressParts.province);
+  if (province === 'cebu' || province === 'cebuprovince') return 'cebu';
+  if (province === 'ncr' || province === 'metromanila' || region === 'ncr') return 'ncr';
+  if (region === 'visayas') return 'visayas';
+  if (region === 'luzon') return 'luzon';
+  if (region === 'mindanao') return 'mindanao';
+  return null;
+}
+
+function shippingQuote(items, products, destination, addressParts) {
+  const area = shippingArea(addressParts);
+  if (!area) return { error: 'Please select a supported delivery region and province.' };
+  if (area === 'cebu' && !destination) {
     return { error: "We couldn't find your address on the map. Please check the street, barangay, city, and province." };
   }
-  // Distances are rounded up to the next whole kilometre.
-  const distanceKm = Math.ceil(haversineKm(SHIPPING_ORIGIN, destination));
+  const distanceKm = area === 'cebu' ? Math.ceil(haversineKm(SHIPPING_ORIGIN, destination)) : null;
   let subtotal = 0;
   const normalizedItems = [];
   for (const item of items) {
     const product = products.find(candidate => String(candidate.id) === String(item.product?.id));
     if (!product) return { error: `${item.product?.name || 'A product'} is no longer available. Please refresh your cart.` };
-    const quantity = Number(item.qty);
+    const quantity = Number(item?.qty);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
       return { error: 'Order quantities must be whole numbers between 1 and 99.' };
     }
@@ -906,8 +942,11 @@ function shippingQuote(items, products, destination) {
     });
   }
 
-  const shippingFee = distanceKm * SHIPPING_RATE_PER_KM;
+  const shippingFee = area === 'cebu'
+    ? Math.round(distanceKm * CEBU_SHIPPING_RATE_PER_KM * 100) / 100
+    : FLAT_SHIPPING_FEES[area];
   return {
+    shippingArea: area,
     distanceKm,
     shippingFee,
     subtotal,
@@ -1068,8 +1107,9 @@ app.post('/api/shipping/quote', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Enter your province and city and add an item to your cart.' });
   }
   try {
-    const destination = cleanPoint(req.body.location) || await deliveryPoint(addressParts);
-    const quote = shippingQuote(req.body.items, await loadProducts(), destination);
+    const area = shippingArea(addressParts);
+    const destination = area === 'cebu' ? cleanPoint(req.body.location) || await deliveryPoint(addressParts) : null;
+    const quote = shippingQuote(req.body.items, await loadProducts(), destination, addressParts);
     if (quote.error) return res.status(422).json({ success: false, message: quote.error });
     const voucher = applyVoucher(req.body.voucherCode, quote.subtotal, await loadVouchers(), await loadOrders());
     const discount = voucher.discount || 0;
@@ -1122,6 +1162,85 @@ app.post('/api/webhooks/paymongo', async (req, res) => {
 
   const event = req.body?.data?.attributes;
   const eventType = String(event?.type || '');
+  if (eventType === 'payment.refund.updated') {
+    const refund = event?.data;
+    const refundId = String(refund?.id || '');
+    const refundAttributes = refund?.attributes || {};
+    const paymentId = String(refundAttributes.payment_id || '');
+    const transferLink = String(refundAttributes.transfer_link || '');
+    if (!refundId || !paymentId) {
+      return res.status(400).json({ success: false, message: 'PayMongo refund event is missing its refund or payment ID.' });
+    }
+    if (!transferLink) return res.json({ success: true, ignored: true, message: 'Refund does not include a customer transfer link.' });
+
+    let transferUrl;
+    try {
+      transferUrl = new URL(transferLink);
+    } catch {
+      return res.status(400).json({ success: false, message: 'PayMongo refund event contains an invalid transfer link.' });
+    }
+    const validTransferHost = transferUrl.protocol === 'https:'
+      && (transferUrl.hostname.endsWith('.paymongo.com') || transferUrl.hostname.endsWith('.paymongo-stg.com'));
+    if (!validTransferHost) {
+      console.error('PayMongo refund event contained an unexpected transfer link host.');
+      return res.status(400).json({ success: false, message: 'PayMongo refund event contains an unexpected transfer link.' });
+    }
+
+    try {
+      const claim = await withLock(async () => {
+        const orders = await loadOrders();
+        const stored = orders.find(item => item.paymongoPaymentId === paymentId);
+        if (!stored) return { unmatched: true };
+        if (!Array.isArray(stored.refundNotifications)) stored.refundNotifications = [];
+        let notification = stored.refundNotifications.find(item => item.refundId === refundId);
+        if (notification?.status === 'sent') return { duplicate: true };
+        if (notification?.status === 'sending'
+          && Date.now() - Date.parse(notification.updatedAt || '') < 5 * 60 * 1000) return { duplicate: true };
+        if (!notification) {
+          notification = { refundId };
+          stored.refundNotifications.push(notification);
+        }
+        notification.status = 'sending';
+        notification.transferLink = transferLink;
+        notification.updatedAt = new Date().toISOString();
+        await saveOrders(orders);
+        return {
+          order: {
+            id: stored.id,
+            firstName: stored.firstName,
+            email: stored.email,
+            orderNumber: orderNumber(stored),
+          },
+        };
+      });
+
+      if (claim.unmatched) {
+        console.warn(`PayMongo refund ${refundId} did not match a PYNX order.`);
+        return res.json({ success: true, ignored: true });
+      }
+      if (claim.duplicate) return res.json({ success: true, duplicate: true });
+
+      const result = await sendRefundTransferLinkEmail(claim.order, transferLink);
+      await withLock(async () => {
+        const orders = await loadOrders();
+        const stored = orders.find(item => item.id === claim.order.id);
+        const notification = stored?.refundNotifications?.find(item => item.refundId === refundId);
+        if (!notification) return;
+        notification.status = result.emailSent ? 'sent' : 'failed';
+        notification.emailError = result.emailError || null;
+        notification.updatedAt = new Date().toISOString();
+        await saveOrders(orders);
+      });
+      if (!result.emailSent) {
+        console.error(`Could not email PayMongo refund link for order ${claim.order.orderNumber}: ${result.emailError || 'unknown email error'}`);
+        return res.status(502).json({ success: false, message: 'Could not send the customer refund email.' });
+      }
+      return res.json({ success: true, emailSent: true });
+    } catch (error) {
+      console.error('PayMongo refund notification failed:', error);
+      return res.status(500).json({ success: false, message: 'Could not process the PayMongo refund notification.' });
+    }
+  }
   if (eventType !== 'checkout_session.payment.paid') return res.json({ success: true, ignored: true });
   const sessionId = String(event?.data?.id || '');
   if (!sessionId) return res.status(400).json({ success: false, message: 'PayMongo event is missing the checkout session ID.' });
@@ -1222,7 +1341,7 @@ app.post('/api/orders', async (req, res) => {
   try {
     const result = await withLock(async () => {
       const products = await loadProducts();
-      const quote = shippingQuote(items, products, destination);
+      const quote = shippingQuote(items, products, destination, addressParts);
       if (quote.error) return { error: quote.error };
       const quantities = new Map();
       for (const item of items) {
@@ -1251,6 +1370,7 @@ app.post('/api/orders', async (req, res) => {
       if (voucher.code) order.voucherCode = voucher.code;
       order.total = quote.subtotal - discount + quote.shippingFee;
       order.shippingDistanceKm = quote.distanceKm;
+      order.shippingArea = quote.shippingArea;
       const originalProducts = products.map(product => ({ ...product }));
       quantities.forEach((quantity, productId) => {
         const product = products.find(candidate => String(candidate.id) === productId);
@@ -1385,7 +1505,23 @@ app.post('/api/orders/track', async (req, res) => {
 app.get('/api/products', async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
-    return res.json({ success: true, products: await loadProductsWithPriceMigration() });
+    const [products, orders] = await Promise.all([loadProductsWithPriceMigration(), loadOrders()]);
+    const soldCounts = new Map();
+    orders.forEach(order => {
+      if (!order || order.status === 'cancelled'
+        || (order.paymentMethod && order.paymentMethod !== 'cash_on_hand' && order.paymentStatus !== 'paid')) return;
+      (Array.isArray(order.items) ? order.items : []).forEach(item => {
+        const productId = String(item?.product?.id ?? '');
+        const quantity = Number(item.qty);
+        if (!productId || !Number.isInteger(quantity) || quantity < 1) return;
+        soldCounts.set(productId, (soldCounts.get(productId) || 0) + quantity);
+      });
+    });
+    const productsWithSales = products.map(product => ({
+      ...product,
+      soldCount: soldCounts.get(String(product.id)) || 0,
+    }));
+    return res.json({ success: true, products: productsWithSales });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Failed to load products.' });
@@ -1486,9 +1622,16 @@ app.post('/api/contact', async (req, res) => {
 app.post('/api/reviews', async (req, res) => {
   const { name, email, rating, comment, productName } = req.body;
   const stars = Number(rating);
+  const images = req.body.images === undefined ? [] : req.body.images;
 
   if (!name || !String(comment || '').trim() || !Number.isInteger(stars) || stars < 1 || stars > 5) {
     return res.status(400).json({ success: false, message: 'Please provide your name, a rating from 1 to 5, and a comment.' });
+  }
+  if (!Array.isArray(images) || images.length > 5
+    || images.some(image => typeof image !== 'string'
+      || image.length > 180000
+      || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image))) {
+    return res.status(400).json({ success: false, message: 'Please upload up to 5 valid review photos. Each photo must be under 180 KB after compression.' });
   }
 
   const review = {
@@ -1498,6 +1641,7 @@ app.post('/api/reviews', async (req, res) => {
     rating: stars,
     comment: String(comment).trim().slice(0, 2000),
     productName: String(productName || '').trim().slice(0, 200),
+    images,
     createdAt: new Date().toISOString(),
   };
 
@@ -1626,7 +1770,12 @@ async function sendCancellationNotifications(order) {
     .map(item => `${item.name}${item.size ? ` / ${item.size}` : ''} x${item.qty}`)
     .join('\n');
   const message = `Order ${number} was cancelled.\nCustomer: ${order.firstName} ${order.lastName}\nEmail: ${order.email}`;
-  const customerMessage = `Hi ${order.firstName},\n\nYour order ${number} has been cancelled. The cancelled items were:\n${items}\n\nIf you need help, please contact PYNX.\n\n- PYNX`;
+  const refundMessage = order.paymentStatus === 'paid' && order.paymentMethod !== 'cash_on_hand'
+    ? '\n\nBecause your online payment was received, PYNX will initiate a refund. Once approved and processed, refunds usually take 3–5 business days. If PayMongo requires bank or e-wallet details, we will email you its secure refund link. The link expires after 3 days.'
+    : order.paymentStatus === 'paid'
+      ? '\n\nYour cash-on-delivery payment was marked as paid. Please contact PYNX so we can arrange the refund. Approved refunds usually take 3–5 business days to process.'
+      : '';
+  const customerMessage = `Hi ${order.firstName},\n\nYour order ${number} has been cancelled. The cancelled items were:\n${items}${refundMessage}\n\nIf you need help, please contact PYNX.\n\n- PYNX`;
   await Promise.all([
     notifyAdmins(`PYNX order ${number} cancelled`, message),
     notifyCustomer(String(order.email || '').trim(), `Your PYNX order ${number} was cancelled`, customerMessage),

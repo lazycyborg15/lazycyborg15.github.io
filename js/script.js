@@ -298,6 +298,7 @@ function cardHTML(p) {
             ${priceHTML}
             ${originalPriceHTML}
             ${stockNote}
+            <div class="product-sold-count">${Number(p.soldCount) || 0} sold</div>
         </div>
     </div>`;
 }
@@ -1033,7 +1034,7 @@ function showToast(msg) {
    LEGAL & COOKIE SETTINGS
 ──────────────────────────────────────── */
 const POLICY_VERSION = '2026-10';
-const RETURN_POLICY_VERSION = '2026-10-26-15-day';
+const RETURN_POLICY_VERSION = '2026-11-07-cancellation-refunds';
 const POLICY_CONTENT = {
     'privacy policy': {
         title: 'Privacy Policy',
@@ -1050,6 +1051,8 @@ const POLICY_CONTENT = {
     'return policy': {
         title: 'Pynx Return & Refund Policy',
         content: `<p>Thank you for shopping at Pynx! We want your shopping experience to be as seamless as possible. Please review our complete return and refund guidelines below.</p>
+            <h3>Order cancellations and refunds</h3>
+            <p>If an order is cancelled after an online payment has been received, PYNX will initiate a refund. Once approved and processed, refunds usually take 3–5 business days. If PayMongo requires bank or e-wallet details to complete a QRPH refund, we will email you PayMongo's secure refund link. Complete the claim within 3 days before the link expires. Cash-on-delivery orders are not refunded unless payment was collected; contact PYNX if you have already paid.</p>
             <h3>1. How long do I have to make a return?</h3>
             <p>We gladly accept returns within 15 days of receipt for eligible items in brand-new condition. Return requests submitted after 15 days will not be processed.</p>
             <h3>2. Non-returnable items</h3>
@@ -1079,7 +1082,7 @@ const POLICY_CONTENT = {
             <ol>
                 <li>Message us on Instagram or via email with your order number and reason for return.</li>
                 <li>Once authorized, ship the item back using a trackable shipping method.</li>
-                <li>Upon passing quality inspection, your refund or store credit will be processed. Approved refunds take 3–5 days to reach your account.</li>
+                <li>Upon passing quality inspection, your refund or store credit will be processed. Approved refunds usually take 3–5 business days after processing begins.</li>
             </ol>
             <p>For assistance, contact us at <a href="mailto:Contactpynx@gmail.com">Contactpynx@gmail.com</a> or message <a href="https://www.instagram.com/pynx.ph/" target="_blank" rel="noopener noreferrer">PYNX on Instagram</a>.</p>`
     },

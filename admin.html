@@ -542,7 +542,7 @@
                             </div>
                             <div class="order-info-row">
                                 <label>Shipping:</label>
-                                <span>₱${Number(order.shippingFee || 0).toFixed(2)} · ${order.shippingDistanceKm !== undefined ? `${Number(order.shippingDistanceKm)} km × ₱6/km` : 'Distance unavailable'}</span>
+                                <span>₱${Number(order.shippingFee || 0).toFixed(2)}</span>
                             </div>
                             <div class="order-info-row">
                                 <label>Payment:</label>
@@ -1088,6 +1088,7 @@
                         <label class="message-label">Review:</label>
                         <p class="concern-message-text">${esc(review.comment)}</p>
                     </div>
+                    ${(Array.isArray(review.images) && review.images.length) ? `<div class="concern-divider"></div><div class="review-admin-photos">${review.images.map((image, imageIndex) => `<img src="${esc(image)}" alt="Customer review photo ${imageIndex + 1}" loading="lazy">`).join('')}</div>` : ''}
                     <div class="concern-divider"></div>
                     <div class="concern-footer-section">
                         <div class="concern-info-row">

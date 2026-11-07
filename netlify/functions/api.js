@@ -3,7 +3,10 @@ const serverless = require('serverless-http');
 const { app, setSeeds } = require('../../server/index');
 
 // JSON files are bundled at build time because the function has no writable disk.
-setSeeds({ products: require('../../data/products.json') });
+setSeeds({
+  products: require('../../data/products.json'),
+  vouchers: require('../../data/vouchers.json'),
+});
 
 const handler = serverless(app);
 

@@ -119,6 +119,12 @@
                 <label for="r-comment">Review</label>
                 <textarea id="r-comment" name="comment" placeholder="Share your experience" maxlength="2000"></textarea>
             </div>
+            <div class="form-group">
+                <label for="r-photos">Review photos <span class="review-photo-limit">(up to 5)</span></label>
+                <input type="file" id="r-photos" accept="image/jpeg,image/png,image/webp" multiple>
+                <p class="review-photo-help">Add up to 5 photos. Images are compressed before upload.</p>
+                <div class="review-photo-previews" id="review-photo-previews" aria-live="polite"></div>
+            </div>
             <button type="submit" class="btn-primary form-submit">Submit Review</button>
             <div class="form-success" id="review-success">
                 <div class="check">✓</div>
@@ -128,7 +134,7 @@
     </section>
 </main>
     <script src="js/config.js"></script>
-    <script src="js/script.js?v=20261026-catalog-payments"></script>
+    <script src="js/script.js?v=20261107-product-sales"></script>
     <script>
         const CONTACT_API_BASE = window.PYNX_API_BASE;
         const contactForm = document.getElementById('contact-form');
@@ -214,6 +220,95 @@
 
         const reviewForm = document.getElementById('review-form');
         const reviewSuccess = document.getElementById('review-success');
+        const reviewPhotoInput = document.getElementById('r-photos');
+        const reviewPhotoPreviews = document.getElementById('review-photo-previews');
+        const reviewImages = [];
+
+        function renderReviewPhotoPreviews() {
+            reviewPhotoPreviews.replaceChildren();
+            reviewImages.forEach((image, index) => {
+                const preview = document.createElement('div');
+                preview.className = 'review-photo-preview';
+                const photo = document.createElement('img');
+                photo.src = image;
+                photo.alt = `Review photo ${index + 1}`;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.textContent = '×';
+                remove.setAttribute('aria-label', `Remove review photo ${index + 1}`);
+                remove.addEventListener('click', () => {
+                    reviewImages.splice(index, 1);
+                    renderReviewPhotoPreviews();
+                });
+                preview.append(photo, remove);
+                reviewPhotoPreviews.append(preview);
+            });
+        }
+
+        function compressReviewPhoto(file) {
+            return new Promise((resolve, reject) => {
+                if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                    reject(new Error(`${file.name} must be a JPEG, PNG, or WebP image.`));
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) {
+                    reject(new Error(`${file.name} is over the 10 MB upload limit.`));
+                    return;
+                }
+                const sourceUrl = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(sourceUrl);
+                    const maxSide = 720;
+                    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                    const context = canvas.getContext('2d');
+                    if (!context) {
+                        reject(new Error(`Could not process ${file.name}.`));
+                        return;
+                    }
+                    context.fillStyle = '#fff';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    let quality = 0.78;
+                    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    while (dataUrl.length > 180000 && quality > 0.35) {
+                        quality -= 0.1;
+                        dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    }
+                    if (dataUrl.length > 180000) {
+                        reject(new Error(`${file.name} could not be compressed enough. Choose a smaller photo.`));
+                        return;
+                    }
+                    resolve(dataUrl);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(sourceUrl);
+                    reject(new Error(`Could not read ${file.name}.`));
+                };
+                image.src = sourceUrl;
+            });
+        }
+
+        reviewPhotoInput.addEventListener('change', async () => {
+            const files = Array.from(reviewPhotoInput.files || []);
+            reviewPhotoInput.value = '';
+            if (reviewImages.length + files.length > 5) {
+                showToast('You can add up to 5 review photos.');
+                return;
+            }
+            for (const file of files) {
+                try {
+                    reviewImages.push(await compressReviewPhoto(file));
+                } catch (error) {
+                    showToast(error.message);
+                }
+            }
+            renderReviewPhotoPreviews();
+        });
+
         reviewForm.addEventListener('submit', async function(event) {
             event.preventDefault();
             const name = document.getElementById('r-name').value.trim();
@@ -228,13 +323,15 @@
                 const response = await fetch(`${CONTACT_API_BASE}/api/reviews`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, productName, rating, comment }),
+                    body: JSON.stringify({ name, email, productName, rating, comment, images: reviewImages }),
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Unable to submit your review.');
                 }
                 reviewForm.reset();
+                reviewImages.length = 0;
+                renderReviewPhotoPreviews();
                 Array.from(reviewForm.children).forEach(el => { if (el !== reviewSuccess) el.style.display = 'none'; });
                 reviewSuccess.style.display = 'block';
             } catch (err) {
