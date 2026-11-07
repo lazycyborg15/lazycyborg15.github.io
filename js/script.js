@@ -323,6 +323,7 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     document.getElementById('modal-desc').textContent  = p.desc;
 
     const modalPriceEl = document.getElementById('modal-price');
+    const sizeGuideLink = document.getElementById('size-guide-link');
     const sizeLabelEl = document.getElementById('size-label-el');
     const sizeGridEl = document.getElementById('size-grid');
     const modalAddBtn = document.querySelector('.modal-add');
@@ -331,6 +332,17 @@ function openModal(id, preselectedSize = null, cartKey = null) {
     const adminOriginalInput = document.getElementById('admin-edit-original');
     const adminOnSaleInput = document.getElementById('admin-edit-onsale');
     const isAdmin = document.body.classList.contains('admin-preview');
+
+    const sizeGuide = p.type === 'cap' ? 'assets/caps/size-guide.png'
+        : p.type === 'bikini' ? 'assets/bikinis/size-guide.png' : null;
+    sizeGuideLink.hidden = !sizeGuide;
+    if (sizeGuide) {
+        sizeGuideLink.href = sizeGuide;
+        sizeGuideLink.setAttribute('aria-label', `${p.type === 'cap' ? 'Cap' : 'Bikini'} size guide (opens in a new tab)`);
+    } else {
+        sizeGuideLink.removeAttribute('href');
+        sizeGuideLink.removeAttribute('aria-label');
+    }
 
     modalPriceEl.textContent = `₱${p.price}.00`;
     modalPriceEl.style.display = '';

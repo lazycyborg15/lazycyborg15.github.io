@@ -3183,6 +3183,13 @@
             line-height: 1.65;
             margin-bottom: 1.4rem;
         }
+        .size-guide-link {
+            align-self: flex-start;
+            color: var(--mid);
+            font-size: .75rem;
+            margin-bottom: 1rem;
+            text-decoration: underline;
+        }
         .size-label {
             font-size: .65rem;
             letter-spacing: .3rem;
