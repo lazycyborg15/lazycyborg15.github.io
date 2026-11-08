@@ -501,7 +501,10 @@ app.post('/api/customers/reset-password', async (req, res) => {
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const now = new Date().toISOString();
   try {
-    const changed = await withLock(async () => {
+    const customer = await withLock(async () => {
+      const customers = await loadCustomers();
+      const target = customers.find(item => item.passwordReset?.tokenHash === tokenHash && item.passwordReset.expiresAt > now);
+      if (!target) return null;
       const credentials = hashPassword(password);
       if (StoreModel) {
         const result = await StoreModel.updateOne({
@@ -509,18 +512,21 @@ app.post('/api/customers/reset-password', async (req, res) => {
           data: { $elemMatch: { 'passwordReset.tokenHash': tokenHash, 'passwordReset.expiresAt': { $gt: now } } },
         }, { $set: { 'data.$.passwordSalt': credentials.passwordSalt, 'data.$.passwordHash': credentials.passwordHash },
           $unset: { 'data.$.passwordReset': '' } });
-        return result.modifiedCount === 1;
+        return result.modifiedCount === 1 ? target : null;
       }
-      const customers = await loadCustomers();
-      const customer = customers.find(item => item.passwordReset?.tokenHash === tokenHash && item.passwordReset.expiresAt > now);
-      if (!customer) return false;
-      Object.assign(customer, credentials);
-      delete customer.passwordReset;
+      Object.assign(target, credentials);
+      delete target.passwordReset;
       await saveCustomers(customers);
-      return true;
+      return target;
     });
-    if (!changed) return res.status(400).json({ success: false, message: 'This reset link is invalid, expired, or has already been used.' });
-    return res.json({ success: true, message: 'Your password has been changed. You can now log in.' });
+    if (!customer) return res.status(400).json({ success: false, message: 'This reset link is invalid, expired, or has already been used.' });
+    const sessionToken = jwt.sign({ role: 'customer', id: customer.id, email: customer.email }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({
+      success: true,
+      message: 'Your password has been changed. You are now signed in.',
+      token: sessionToken,
+      customer: { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, email: customer.email },
+    });
   } catch (error) {
     console.error('Password reset failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to reset your password. Please try again later.' });
