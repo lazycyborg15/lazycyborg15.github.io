@@ -18,6 +18,7 @@ const PAYMONGO_WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || '';
 const ONLINE_PAYMENTS_ENABLED = Boolean(PAYMONGO_SECRET_KEY && PAYMONGO_WEBHOOK_SECRET);
 const CEBU_CITY_SHIPPING_RATE_PER_KM = 1.49;
 const CEBU_PROVINCE_SHIPPING_RATE_PER_KM = 0.78;
+const MINIMUM_SHIPPING_FEE = 66.06;
 const FLAT_SHIPPING_FEES = {
   visayas: 155,
   luzon: 180,
@@ -1044,7 +1045,7 @@ function shippingQuote(items, products, destination, addressParts) {
   }
 
   const shippingFee = area === 'cebu'
-    ? Math.round(distanceKm * cebuShippingRate(addressParts.city) * 100) / 100
+    ? Math.max(MINIMUM_SHIPPING_FEE, Math.round(distanceKm * cebuShippingRate(addressParts.city) * 100) / 100)
     : FLAT_SHIPPING_FEES[area];
   return {
     shippingArea: area,
