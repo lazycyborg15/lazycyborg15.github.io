@@ -70,7 +70,7 @@
             if (!response.ok) throw new Error('Failed to load account info');
             const result = await response.json();
             if (result.success && result.customer) {
-                customerName.textContent = `${result.customer.firstName} ${result.customer.lastName}`;
+                customerName.textContent = result.customer.firstName + ' ' + result.customer.lastName;
                 customerEmail.textContent = result.customer.email;
                 notLoggedInDiv.hidden = true;
                 loggedInContent.hidden = false;
@@ -117,8 +117,8 @@
                     'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    currentPassword,
-                    newPassword,
+                    currentPassword: currentPassword,
+                    newPassword: newPassword,
                 }),
             });
             const result = await response.json();
