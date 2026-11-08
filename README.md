@@ -64,7 +64,7 @@ Netlify hosts the pages and runs the API as a function ([netlify/functions/api.j
    - Vouchers are managed in `data/vouchers.json` (fields: `code`, `type` `percent` or `fixed`, `value`, `minSubtotal`, `expiresAt`, `maxUses`, `active`). Discounts apply to item subtotal only, not shipping. Usage is counted from non-cancelled orders. The sample `PYNX10` voucher is active; set `active` to `false` or remove it before launch.
    - Optional: `ADMIN_EMAIL`, `NOTIFY_EMAIL`, `JNT_TRACKING_URL_TEMPLATE`, and `SHIP_FROM`.
 4. Redeploy, then open `<your-site-url>/api/health`; it should return `{"status":"ok"}`.
-5. Open `/admin.html` on the Netlify site and log in.
+5. Open `/x7k2q9v4m1` on the Netlify site and log in.
 
 Netlify cannot keep files, so accounts, orders, reviews, messages, and product prices live in MongoDB. Products start from `data/products.json` until an admin edits one.
 

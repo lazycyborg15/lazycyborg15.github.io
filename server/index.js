@@ -2357,7 +2357,7 @@ app.get('/api/admin/reviews', verifyAdmin, async (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Serve the standalone admin page from the root workspace so login works when opened via localhost.
-app.get('/admin.html', (req, res) => {
+app.get('/x7k2q9v4m1', (req, res) => {
   res.sendFile(path.join(__dirname, '../admin.html'));
 });
 

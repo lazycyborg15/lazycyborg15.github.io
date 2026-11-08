@@ -53,6 +53,18 @@
   status = 200
 
 [[redirects]]
+  from = "/admin.html"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/x7k2q9v4m1"
+  to = "/admin.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
