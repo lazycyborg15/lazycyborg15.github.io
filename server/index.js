@@ -527,6 +527,79 @@ app.post('/api/customers/reset-password', async (req, res) => {
   }
 });
 
+app.post('/api/customers/change-password', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  let customerId;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (payload.role !== 'customer') throw new Error('Invalid role');
+    customerId = payload.id;
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+  if (typeof currentPassword !== 'string' || !currentPassword
+    || typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 200) {
+    return res.status(400).json({ success: false, message: 'Provide your current password and a new password between 6 and 200 characters.' });
+  }
+
+  try {
+    const changed = await withLock(async () => {
+      const customers = await loadCustomers();
+      const customer = customers.find(item => item.id === customerId);
+      if (!customer || !verifyPassword(currentPassword, customer)) {
+        return { invalid: true };
+      }
+
+      const credentials = hashPassword(newPassword);
+      Object.assign(customer, credentials);
+      await saveCustomers(customers);
+      return { success: true };
+    });
+
+    if (changed.invalid) {
+      return res.status(401).json({ success: false, message: 'Your current password is incorrect.' });
+    }
+    return res.json({ success: true, message: 'Your password has been changed successfully.' });
+  } catch (error) {
+    console.error('Password change failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to change your password. Please try again later.' });
+  }
+});
+
+app.get('/api/customers/me', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (payload.role !== 'customer') throw new Error('Invalid role');
+    const customers = await loadCustomers();
+    const customer = customers.find(item => item.id === payload.id);
+    if (!customer) return res.status(404).json({ success: false, message: 'Customer not found.' });
+    return res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        email: customer.email,
+      },
+    });
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
+  }
+});
+
 // processing = being packed, done = packed and ready to ship, shipped = on the way.
 const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'cancelled'];
 

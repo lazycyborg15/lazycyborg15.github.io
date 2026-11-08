@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Account Settings | PYNX</title>
+    <link rel="stylesheet" href="css/styles.css?v=account">
+    <style>.auth-form[hidden] { display: none; }</style>
+</head>
+<body class="customer-auth-page">
+<header id="site-header" class="customer-header">
+    <a class="logo" href="index.html#home"><img class="header-logo" src="logo/pynx-logo-black.png" alt="PYNX"></a>
+</header>
+<main class="page-auth customer-auth-page-main">
+    <section class="auth-panel customer-auth-panel">
+        <div class="auth-inner customer-auth-inner">
+            <div class="section-header customer-header-copy">
+                <p class="section-eyebrow">Customer Account</p>
+                <h1 id="page-title">Account Settings</h1>
+                <p class="page-sub" id="page-description">Manage your PYNX account and security settings.</p>
+            </div>
+            <div id="not-logged-in" class="auth-form">
+                <p>Please log in to access your account settings.</p>
+                <a href="login.html" class="btn-primary">Go to Login</a>
+            </div>
+            <div id="logged-in-content" hidden>
+                <div class="auth-form" id="account-info">
+                    <p><strong>Name:</strong> <span id="customer-name"></span></p>
+                    <p><strong>Email:</strong> <span id="customer-email"></span></p>
+                    <hr style="margin:20px 0;border:none;border-top:1px solid #eee">
+                </div>
+                <form id="change-password-form" class="auth-form">
+                    <h2 style="font-size:18px;margin-top:0;margin-bottom:15px">Change Password</h2>
+                    <label for="current-password">Current password</label>
+                    <input id="current-password" type="password" autocomplete="current-password" required>
+                    <label for="new-password">New password (6 or more characters)</label>
+                    <input id="new-password" type="password" autocomplete="new-password" minlength="6" maxlength="200" required>
+                    <label for="confirm-new-password">Confirm new password</label>
+                    <input id="confirm-new-password" type="password" autocomplete="new-password" minlength="6" maxlength="200" required>
+                    <button type="submit" class="btn-primary form-submit">Change Password</button>
+                </form>
+                <p class="auth-note" id="password-note" role="status" aria-live="polite"></p>
+            </div>
+            <p class="auth-switch"><a href="login.html">Back to login</a> • <a href="index.html#home">Home</a></p>
+        </div>
+    </section>
+</main>
+<script src="js/config.js"></script>
+<script>
+    const notLoggedInDiv = document.getElementById('not-logged-in');
+    const loggedInContent = document.getElementById('logged-in-content');
+    const customerName = document.getElementById('customer-name');
+    const customerEmail = document.getElementById('customer-email');
+    const changePasswordForm = document.getElementById('change-password-form');
+    const passwordNote = document.getElementById('password-note');
+
+    async function loadAccountInfo() {
+        const token = localStorage.getItem('pynx_customer_token');
+        if (!token) {
+            notLoggedInDiv.hidden = false;
+            loggedInContent.hidden = true;
+            return;
+        }
+
+        try {
+            const response = await fetch(`${window.PYNX_API_BASE}/api/customers/me`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to load account info');
+            const result = await response.json();
+            if (result.success && result.customer) {
+                customerName.textContent = `${result.customer.firstName} ${result.customer.lastName}`;
+                customerEmail.textContent = result.customer.email;
+                notLoggedInDiv.hidden = true;
+                loggedInContent.hidden = false;
+            } else {
+                throw new Error('Invalid response');
+            }
+        } catch (error) {
+            console.error('Failed to load account info:', error);
+            localStorage.removeItem('pynx_customer_token');
+            notLoggedInDiv.hidden = false;
+            loggedInContent.hidden = true;
+        }
+    }
+
+    async function changePassword(event) {
+        event.preventDefault();
+        const token = localStorage.getItem('pynx_customer_token');
+        if (!token) {
+            passwordNote.textContent = 'Please log in first.';
+            passwordNote.classList.add('error');
+            return;
+        }
+
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-new-password').value;
+
+        if (newPassword !== confirmPassword) {
+            passwordNote.textContent = 'New passwords do not match.';
+            passwordNote.classList.add('error');
+            return;
+        }
+
+        const button = changePasswordForm.querySelector('button');
+        button.disabled = true;
+        passwordNote.classList.remove('error');
+        passwordNote.textContent = 'Please wait...';
+
+        try {
+            const response = await fetch(`${window.PYNX_API_BASE}/api/customers/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    currentPassword,
+                    newPassword,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Password change failed');
+            passwordNote.textContent = result.message;
+            passwordNote.classList.remove('error');
+            changePasswordForm.reset();
+        } catch (error) {
+            console.error('Password change failed:', error);
+            passwordNote.textContent = error instanceof TypeError || error instanceof SyntaxError
+                ? 'Cannot reach the server. Please try again later.' : error.message;
+            passwordNote.classList.add('error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    changePasswordForm.addEventListener('submit', changePassword);
+    loadAccountInfo();
+</script>
+<footer><div class="footer-bottom"><p>© 2026 PYNX. All rights reserved.</p></div></footer>
+</body>
+</html>
