@@ -321,7 +321,7 @@ async function notifyNewsletterSubscribers(product, type, req) {
   const discounted = Number(product.originalPrice) > Number(product.price);
   const label = type === 'new' ? 'New at PYNX' : 'Now on sale at PYNX';
   const subject = `${label}: ${String(product.name).replace(/[\r\n]/g, ' ').slice(0, 120)}`;
-  const siteBase = String(process.env.SITE_URL || process.env.URL || '').replace(/\/+$/, '');
+  const siteBase = String(process.env.SITE_URL || process.env.URL || '').trim().replace(/^["']+|["']+$/g, '').replace(/\/+$/, '');
   const shopUrl = siteBase ? `${siteBase}/shop.html?view=${type === 'new' ? 'new' : 'sale'}` : '';
   const apiBase = newsletterApiBase(req);
 
@@ -441,7 +441,7 @@ app.post('/api/customers/forgot-password', async (req, res) => {
   }
   let base;
   try {
-    base = new URL(process.env.SITE_URL || '');
+    base = new URL(String(process.env.SITE_URL || '').trim().replace(/^["']+|["']+$/g, ''));
     if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password
       || (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname))) throw new Error('Invalid SITE_URL');
   } catch (error) {
