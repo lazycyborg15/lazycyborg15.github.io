@@ -724,7 +724,41 @@
         const paidButton = order.paymentMethod === 'cash_on_hand' && status === 'delivered' && order.paymentStatus !== 'paid'
             ? `<button type="button" class="order-payment-btn" data-order-id="${esc(order.id)}">Mark cash received</button>`
             : '';
-        return `${statusControl}${paidButton}${cancelButton}`;
+        const onlinePaid = order.paymentMethod !== 'cash_on_hand' && order.paymentStatus === 'paid';
+        const refundButton = onlinePaid && order.paymongoPaymentId && !order.refund
+            ? `<button type="button" class="order-refund-btn cancel" data-order-id="${esc(order.id)}">Refund payment</button>`
+            : '';
+        const refundStatus = order.refund
+            ? `<p class="order-refund-status">Refund ${esc(order.refund.status || 'requested')}${order.refund.id ? ` (${esc(order.refund.id)})` : ''}</p>`
+            : '';
+        return `${statusControl}${paidButton}${cancelButton}${refundButton}${refundStatus}`;
+    }
+
+    async function refundOrder(orderId, button) {
+        const token = getToken();
+        const confirmed = await showAdminDialog({
+            title: 'Refund this payment?',
+            message: 'PayMongo will start the refund. The customer will receive a secure PayMongo link by email to enter their bank or e-wallet details.',
+            confirmLabel: 'Refund payment',
+            destructive: true
+        });
+        if (!confirmed) return;
+        button.disabled = true;
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/refund`), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) throw new Error(data.message || 'Unable to request the refund.');
+            await fetchOrders();
+            adminStatus.textContent = 'Refund requested. The customer will receive a PayMongo link by email to add their bank details.';
+            adminStatus.classList.remove('error');
+        } catch (error) {
+            adminStatus.textContent = error.message || 'Unable to request the refund.';
+            adminStatus.classList.add('error');
+            button.disabled = false;
+        }
     }
 
     async function setOrderStatus(orderId, status, button) {
@@ -919,6 +953,11 @@
         const paymentButton = event.target.closest('.order-payment-btn');
         if (paymentButton) {
             markCashPaid(paymentButton.dataset.orderId, paymentButton);
+            return;
+        }
+        const refundButton = event.target.closest('.order-refund-btn');
+        if (refundButton) {
+            refundOrder(refundButton.dataset.orderId, refundButton);
             return;
         }
         const button = event.target.closest('.order-remove-btn');

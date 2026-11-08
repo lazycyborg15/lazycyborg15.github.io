@@ -2147,6 +2147,88 @@ app.patch('/api/admin/orders/:id/payment', verifyAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/admin/orders/:id/refund', verifyAdmin, async (req, res) => {
+  const orderId = String(req.params.id);
+  try {
+    const claim = await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId);
+      if (!stored) return { missing: true };
+      if (stored.paymentMethod === 'cash_on_hand') return { invalid: 'Cash-on-delivery payments are refunded outside PayMongo. Please arrange the refund manually.' };
+      if (stored.paymentStatus !== 'paid') return { invalid: 'Only paid online payments can be refunded.' };
+      if (!stored.paymongoPaymentId) return { invalid: 'This order has no PayMongo payment ID, so it cannot be refunded from the admin page.' };
+      if (stored.refund) return { invalid: 'A refund has already been requested for this order.' };
+      const amount = Math.round(Number(stored.total) * 100);
+      if (!Number.isFinite(amount) || amount < 100) return { invalid: 'The refund amount is below the PayMongo minimum of PHP 1.00.' };
+      stored.refund = { status: 'requesting', requestedAt: new Date().toISOString(), amount };
+      await saveOrders(orders);
+      return { order: stored, amount };
+    });
+    if (claim.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (claim.invalid) return res.status(409).json({ success: false, message: claim.invalid });
+
+    const order = claim.order;
+    let refundResult;
+    try {
+      const response = await fetch('https://api.paymongo.com/v1/refunds', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${PAYMONGO_SECRET_KEY}:`).toString('base64')}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              amount: claim.amount,
+              payment_id: order.paymongoPaymentId,
+              reason: 'requested_by_customer',
+              notes: `PYNX order ${orderNumber(order)}`.slice(0, 255),
+              metadata: { order_id: order.id, order_number: orderNumber(order) },
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      refundResult = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = refundResult?.errors?.[0]?.detail || `PayMongo responded with ${response.status}.`;
+        throw new Error(detail);
+      }
+    } catch (error) {
+      await withLock(async () => {
+        const orders = await loadOrders();
+        const stored = orders.find(item => item.id === orderId);
+        if (stored && stored.refund?.status === 'requesting') {
+          delete stored.refund;
+          await saveOrders(orders);
+        }
+      });
+      console.error('PayMongo refund request failed:', error);
+      return res.status(502).json({ success: false, message: `PayMongo could not create the refund: ${error.message}` });
+    }
+
+    const refund = refundResult?.data || {};
+    const updated = await withLock(async () => {
+      const orders = await loadOrders();
+      const stored = orders.find(item => item.id === orderId);
+      if (!stored) return null;
+      stored.refund = {
+        id: String(refund.id || ''),
+        status: String(refund.attributes?.status || 'pending'),
+        amount: claim.amount,
+        requestedAt: claim.order.refund?.requestedAt || new Date().toISOString(),
+      };
+      await saveOrders(orders);
+      return stored;
+    });
+    return res.json({ success: true, order: updated || order });
+  } catch (error) {
+    console.error('Refund request failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to request this refund.' });
+  }
+});
+
 app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   const orderId = String(req.params.id);
   const status = String(req.body.status || '');
