@@ -1045,7 +1045,7 @@ function shippingQuote(items, products, destination, addressParts) {
   }
 
   const shippingFee = area === 'cebu'
-    ? Math.max(MINIMUM_SHIPPING_FEE, Math.round(distanceKm * cebuShippingRate(addressParts.city) * 100) / 100)
+    ? Math.round((MINIMUM_SHIPPING_FEE + distanceKm * cebuShippingRate(addressParts.city)) * 100) / 100
     : FLAT_SHIPPING_FEES[area];
   return {
     shippingArea: area,
