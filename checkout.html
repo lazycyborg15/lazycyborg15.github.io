@@ -99,7 +99,7 @@
                 <fieldset class="checkout-fulfillment">
                     <legend>ORDER TYPE:</legend>
                     <label><input type="radio" name="fulfillment" value="delivery" checked> Delivery</label>
-                    <label><input type="radio" name="fulfillment" value="walkin"> Walk-in (buy on the spot, collect at store)</label>
+                    <label><input type="radio" name="fulfillment" value="walkin"> Walk-in</label>
                 </fieldset>
                 <div id="checkout-address-fields">
                 <div class="form-group">
@@ -516,7 +516,7 @@
             addressFields.hidden = walkin;
             addressFields.querySelectorAll('input, select').forEach(field => { field.required = !walkin; });
             document.getElementById('checkout-cash-label').textContent = walkin ? 'Cash on pickup' : 'Cash on delivery';
-            refreshShippingQuote();
+            refreshShippingQuo 
         }
 
         async function refreshShippingQuote() {
