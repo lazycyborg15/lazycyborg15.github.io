@@ -1158,6 +1158,10 @@
             opacity: 1;
             transform: translateY(0);
         }
+        .shop-category-card.is-visited {
+            filter: grayscale(1) contrast(.9);
+            opacity: .55;
+        }
         .shop-category-card.is-opening {
             animation: categoryLaunch .32s var(--ease) forwards;
         }

@@ -1318,7 +1318,8 @@ function initCategoryNavigation() {
         card.addEventListener('click', function(event) {
             if (event.defaultPrevented) return;
             event.preventDefault();
-            this.classList.add('is-opening');
+            markCollectionVisited(this.dataset.type);
+            this.classList.add('is-visited', 'is-opening');
             window.setTimeout(() => {
                 window.location.href = this.href;
             }, 320);
@@ -1421,6 +1422,27 @@ const COLLECTION_META = {
     bikini: { label: 'Bikini', eyebrow: 'Swimwear',  desc: 'Clean lines, soft coverage, and tonal pieces designed for motion.',        theme: 'light' }
 };
 const NEW_ARRIVAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const VISITED_COLLECTIONS_KEY = 'pynx_visited_collections';
+
+function getVisitedCollections() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(VISITED_COLLECTIONS_KEY));
+        return Array.isArray(stored) ? stored : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function markCollectionVisited(type) {
+    const visited = getVisitedCollections();
+    if (visited.includes(type)) return;
+    visited.push(type);
+    try {
+        localStorage.setItem(VISITED_COLLECTIONS_KEY, JSON.stringify(visited));
+    } catch (error) {
+        // Storage can be unavailable (e.g. private mode); the card still navigates.
+    }
+}
 
 function isNewArrivalProduct(product) {
     const createdAt = Date.parse(product.createdAt || '');
@@ -1441,17 +1463,19 @@ function renderShopCollections() {
     const grid = document.getElementById('shop-category-grid');
     if (!grid) return;
     const types = [...new Set(PRODUCTS.map(p => p.type))];
+    const visited = getVisitedCollections();
     grid.innerHTML = types.map(type => {
         const items = PRODUCTS.filter(p => p.type === type);
         const meta = collectionMetaFor(type, items);
         const isDark = meta.theme !== 'light';
+        const visitedClass = visited.includes(type) ? ' is-visited' : '';
         const bg = isDark
             ? 'linear-gradient(180deg, rgba(17,17,17,0.96), rgba(17,17,17,0.82))'
             : 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(240,240,235,0.9))';
         const color = isDark ? '#f0f0eb' : '#111';
         const subColor = isDark ? 'rgba(240,240,235,.72)' : 'rgba(17,17,17,.68)';
         const descColor = isDark ? 'rgba(240,240,235,.8)' : 'rgba(17,17,17,.78)';
-        return `<a href="shop.html?type=${encodeURIComponent(type)}" class="shop-category-card reveal" style="display:flex; flex-direction:column; justify-content:space-between; min-height: 270px; padding: 2rem; border-radius: 24px; background: ${bg}; color: ${color}; text-decoration: none; box-shadow: 0 24px 60px rgba(17,17,17,0.1);">
+        return `<a href="shop.html?type=${encodeURIComponent(type)}" data-type="${type}" class="shop-category-card reveal${visitedClass}" style="display:flex; flex-direction:column; justify-content:space-between; min-height: 270px; padding: 2rem; border-radius: 24px; background: ${bg}; color: ${color}; text-decoration: none; box-shadow: 0 24px 60px rgba(17,17,17,0.1);">
             <span style="font-size: .72rem; letter-spacing: .38rem; text-transform: uppercase; color: ${subColor};">${meta.eyebrow}</span>
             <div>
                 <h3 style="font-family: 'Bebas Neue', Arial, sans-serif; font-size: 3.1rem; letter-spacing: .2rem; margin: 0 0 .5rem;">${meta.label}</h3>
