@@ -69,7 +69,7 @@
                 <div class="form-group checkout-voucher">
                     <label for="checkout-voucher">VOUCHER CODE:</label>
                     <div style="display:flex;gap:8px">
-                        <input type="text" id="checkout-voucher" placeholder="Enter voucher code" autocomplete="off">
+                        <input type="text" id="checkout-voucher" placeholder="Enter voucher code" autocomplete="off" style="text-transform:uppercase">
                         <button type="button" id="checkout-voucher-apply">Apply</button>
                     </div>
                     <p class="checkout-address-note" id="checkout-voucher-status" role="status"></p>
@@ -96,6 +96,12 @@
                     <label for="checkout-contact">CONTACT NO:</label>
                     <input type="tel" id="checkout-contact" placeholder="Contact Number" required>
                 </div>
+                <fieldset class="checkout-fulfillment">
+                    <legend>ORDER TYPE:</legend>
+                    <label><input type="radio" name="fulfillment" value="delivery" checked> Delivery</label>
+                    <label><input type="radio" name="fulfillment" value="walkin"> Walk-in (buy on the spot, collect at store)</label>
+                </fieldset>
+                <div id="checkout-address-fields">
                 <div class="form-group">
                     <label for="checkout-region">REGION:</label>
                     <select id="checkout-region" required>
@@ -132,6 +138,7 @@
                     <input type="text" id="checkout-street" placeholder="Enter Address" autocomplete="street-address" required>
                 </div>
                 <p class="checkout-address-note" id="checkout-address-status" role="status" aria-live="polite">Select your region to load available provinces.</p>
+                </div>
                 <div class="form-group">
                     <label for="checkout-email">EMAIL ADDRESS:</label>
                     <input type="email" id="checkout-email" placeholder="Email Address" required>
@@ -141,7 +148,7 @@
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="gcash" disabled> GCash (coming soon)</label>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="card" disabled> Card (coming soon)</label>
                     <label class="payment-unavailable" hidden><input type="radio" name="payment-method" value="qrph" disabled> QRPH</label>
-                    <label><input type="radio" name="payment-method" value="cash_on_hand" required checked> Cash on delivery</label>
+                    <label><input type="radio" name="payment-method" value="cash_on_hand" required checked> <span id="checkout-cash-label">Cash on delivery</span></label>
                     <p id="checkout-payment-note">Cash on delivery is available. Checking PayMongo payment options...</p>
                     <div class="checkout-payment-info" id="checkout-payment-info" role="status" aria-live="polite" hidden></div>
                 </fieldset>
@@ -499,6 +506,19 @@
             document.getElementById('checkout-discount').textContent = `-₱${value.toFixed(2)}`;
         }
 
+        function isWalkinOrder() {
+            return document.querySelector('input[name="fulfillment"]:checked')?.value === 'walkin';
+        }
+
+        function applyFulfillmentMode() {
+            const walkin = isWalkinOrder();
+            const addressFields = document.getElementById('checkout-address-fields');
+            addressFields.hidden = walkin;
+            addressFields.querySelectorAll('input, select').forEach(field => { field.required = !walkin; });
+            document.getElementById('checkout-cash-label').textContent = walkin ? 'Cash on pickup' : 'Cash on delivery';
+            refreshShippingQuote();
+        }
+
         async function refreshShippingQuote() {
             const parts = addressParts();
             const cartItems = getCheckoutItems();
@@ -506,6 +526,15 @@
             const note = document.getElementById('checkout-shipping-note');
             const apiItems = cartItems.map(item => ({ product: { id: item.product?.id }, qty: Number(item.qty) }));
             activeShippingQuote = null;
+
+            if (isWalkinOrder()) {
+                fee.textContent = 'Not applicable (walk-in)';
+                note.textContent = 'Walk-in purchases are collected at the store, so there is no shipping fee.';
+                const subtotal = Number(document.getElementById('checkout-subtotal').textContent.replace(/[^\d.]/g, '')) || 0;
+                document.getElementById('checkout-total').textContent = `₱${subtotal.toFixed(2)}`;
+                setDiscount(0);
+                return null;
+            }
 
             if (!parts.province || !parts.city || !apiItems.length) {
                 fee.textContent = 'Enter your delivery address';
@@ -769,6 +798,8 @@
             window.openPolicyModal('return policy');
         });
 
+        document.querySelectorAll('input[name="fulfillment"]').forEach(radio => radio.addEventListener('change', applyFulfillmentMode));
+
         document.getElementById('checkout-form').addEventListener('submit', async function(event) {
             event.preventDefault();
             if (checkoutSubmitting) return;
@@ -781,6 +812,7 @@
             const firstName = document.getElementById('checkout-first-name').value.trim();
             const lastName = document.getElementById('checkout-last-name').value.trim();
             const parts = addressParts();
+            const walkin = isWalkinOrder();
             const address = formatAddress(parts);
             const email = document.getElementById('checkout-email').value.trim();
             const contact = document.getElementById('checkout-contact').value.trim();
@@ -808,7 +840,7 @@
                 size: item.size || '',
             }));
 
-            if (!firstName || !lastName || !email || !contact || !parts.region || !parts.province || !parts.city || !parts.barangay || !parts.postalCode || !parts.street) {
+            if (!firstName || !lastName || !email || !contact || (!walkin && (!parts.region || !parts.province || !parts.city || !parts.barangay || !parts.postalCode || !parts.street))) {
                 alert('Please complete all fields.');
                 return;
             }
@@ -816,10 +848,12 @@
                 alert('Choose a payment method.');
                 return;
             }
-            activeShippingQuote = await refreshShippingQuote();
-            if (!activeShippingQuote) {
-                alert(document.getElementById('checkout-shipping-note').textContent || 'Shipping is unavailable for this address.');
-                return;
+            if (!walkin) {
+                activeShippingQuote = await refreshShippingQuote();
+                if (!activeShippingQuote) {
+                    alert(document.getElementById('checkout-shipping-note').textContent || 'Shipping is unavailable for this address.');
+                    return;
+                }
             }
             if (!returnPolicyAccepted) {
                 if (typeof window.openPolicyModal !== 'function') {
@@ -840,8 +874,9 @@
                     body: JSON.stringify({
                         firstName,
                         lastName,
-                        address,
-                        addressParts: parts,
+                        fulfillment: walkin ? 'walkin' : 'delivery',
+                        address: walkin ? undefined : address,
+                        addressParts: walkin ? undefined : parts,
                         email,
                         contact,
                         items,

@@ -619,7 +619,7 @@ app.get('/api/customers/me', async (req, res) => {
 });
 
 // processing = being packed, done = packed and ready to ship, shipped = on the way.
-const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'cancelled'];
+const ORDER_STATUSES = ['processing', 'done', 'shipped', 'delivered', 'picked_up', 'cancelled'];
 
 // Optional shipping origin (for example "Cagayan de Oro City, Misamis Oriental") drawn on the tracking map.
 const SHIP_FROM = process.env.SHIP_FROM || '';
@@ -702,6 +702,7 @@ async function shipFromPoint() {
 
 async function ensureDestination(order) {
   if (order.destination) return order.destination;
+  if (order.fulfillment === 'walkin') return null;
   // Region and postal code don't help the lookup, so only street, barangay, city and province are searched.
   const parts = order.addressParts;
   const point = await geocode(parts ? [parts.street, parts.barangay, parts.city, parts.province].filter(Boolean).join(', ') : order.address);
@@ -978,7 +979,7 @@ function publicOrder(order, map = {}) {
     firstName: order.firstName,
     recipient: { name: `${order.firstName} ${order.lastName}`.trim(), phone: maskPhone(order.contact), address: order.address },
     status: order.status || 'processing',
-    createdAt: order.createdAt,
+    fulfillment: order.fulfillment === 'walkin' ? 'walkin' : 'delivery',
     statusUpdatedAt: order.statusUpdatedAt || null,
     statusTimes: order.statusTimes || {},
     events: trackingEvents(order),
@@ -1020,10 +1021,16 @@ async function trackingPayload(order) {
   return publicOrder(order, { destination, origin });
 }
 
+function paymentLabel(order) {
+  if (order.paymentMethod === 'cash_on_hand') return order.fulfillment === 'walkin' ? 'Cash on pickup' : 'Cash on delivery';
+  return order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card';
+}
+
 function receiptEmail(order, link) {
   const lines = orderItemLines(order.items || []);
   const number = orderNumber(order);
   const mapsLink = googleMapsUrl(order.address);
+  const isWalkin = order.fulfillment === 'walkin';
   const placed = formatDateTime(order.createdAt);
   const text = [
     `Hi ${order.firstName},`,
@@ -1032,7 +1039,7 @@ function receiptEmail(order, link) {
     '',
     `Order number: ${number}`,
     `Order placed: ${placed}`,
-    `Payment method: ${order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card'}`,
+    `Payment method: ${paymentLabel(order)}`,
     `Payment status: ${order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}`,
     '',
     'Items:',
@@ -1040,10 +1047,9 @@ function receiptEmail(order, link) {
     '',
     `Item subtotal: PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}`,
     ...(order.discount > 0 ? [`Voucher ${order.voucherCode} discount: -PHP ${Number(order.discount).toFixed(2)}`] : []),
-    `Additional fee (shipping): PHP ${Number(order.shippingFee || 0).toFixed(2)}`,
+    ...(isWalkin ? [] : [`Additional fee (shipping): PHP ${Number(order.shippingFee || 0).toFixed(2)}`]),
     `Total to pay: PHP ${order.total.toFixed(2)}`,
-    `Shipping address: ${order.address}`,
-    `View on Google Maps: ${mapsLink}`,
+    ...(isWalkin ? ['Purchase type: Walk-in (collect at store)'] : [`Shipping address: ${order.address}`, `View on Google Maps: ${mapsLink}`]),
     `Contact: ${order.contact}`,
     '',
     link ? `Track your order on the map: ${link}` : `Quote your order number ${number} when contacting us about this order.`,
@@ -1058,9 +1064,11 @@ function receiptEmail(order, link) {
 <p>Hi ${escapeHtml(order.firstName)},</p>
 <p>Thank you for shopping with PYNX. We've received your order. Here is your receipt.</p>
 <p><strong>Order number:</strong> ${number}<br><strong>Order placed:</strong> ${escapeHtml(placed)}</p>
-<p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
-<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr>${order.discount > 0 ? `<tr><td colspan="2" style="padding:10px 0">Voucher ${escapeHtml(order.voucherCode)}</td><td style="padding:10px 0;text-align:right">-PHP ${Number(order.discount).toFixed(2)}</td></tr>` : ''}<tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr><tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
-<p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>
+<p><strong>Payment:</strong> ${escapeHtml(paymentLabel(order))} (${escapeHtml(order.paymentStatus === 'paid' ? 'Paid' : 'Pending')})</p>
+<table style="width:100%;border-collapse:collapse">${rows}<tr><td colspan="2" style="padding:10px 0">Item subtotal</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.subtotal ?? order.total - (order.shippingFee || 0)).toFixed(2)}</td></tr>${order.discount > 0 ? `<tr><td colspan="2" style="padding:10px 0">Voucher ${escapeHtml(order.voucherCode)}</td><td style="padding:10px 0;text-align:right">-PHP ${Number(order.discount).toFixed(2)}</td></tr>` : ''}${isWalkin ? '' : `<tr><td colspan="2" style="padding:10px 0">Additional fee (shipping)</td><td style="padding:10px 0;text-align:right">PHP ${Number(order.shippingFee || 0).toFixed(2)}</td></tr>`}<tr><td colspan="2" style="padding:10px 0;font-weight:bold">Total to pay</td><td style="padding:10px 0;text-align:right;font-weight:bold">PHP ${order.total.toFixed(2)}</td></tr></table>
+${isWalkin
+  ? `<p><strong>Purchase type:</strong> Walk-in (collect at store)<br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>`
+  : `<p><strong>Shipping address:</strong> ${escapeHtml(order.address)}<br><a href="${escapeHtml(mapsLink)}">View on Google Maps</a><br><strong>Contact:</strong> ${escapeHtml(order.contact)}</p>`}
 ${link ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#111;color:#fff;padding:12px 22px;text-decoration:none;border-radius:4px">Track your order</a></p><p style="font-size:12px;color:#777">Or open this link: ${escapeHtml(link)}</p>` : ''}
 <p>- PYNX</p></div>`;
   return { text, html };
@@ -1111,13 +1119,7 @@ function cebuShippingRate(city) {
     : CEBU_PROVINCE_SHIPPING_RATE_PER_KM;
 }
 
-function shippingQuote(items, products, destination, addressParts) {
-  const area = shippingArea(addressParts);
-  if (!area) return { error: 'Please select a supported delivery region and province.' };
-  if (area === 'cebu' && !destination) {
-    return { error: "We couldn't find your address on the map. Please check the street, barangay, city, and province." };
-  }
-  const distanceKm = area === 'cebu' ? Math.ceil(haversineKm(SHIPPING_ORIGIN, destination)) : null;
+function priceItems(items, products) {
   let subtotal = 0;
   const normalizedItems = [];
   for (const item of items) {
@@ -1134,6 +1136,19 @@ function shippingQuote(items, products, destination, addressParts) {
       size: clean(item.size, 20),
     });
   }
+  return { subtotal, items: normalizedItems };
+}
+
+function shippingQuote(items, products, destination, addressParts) {
+  const area = shippingArea(addressParts);
+  if (!area) return { error: 'Please select a supported delivery region and province.' };
+  if (area === 'cebu' && !destination) {
+    return { error: "We couldn't find your address on the map. Please check the street, barangay, city, and province." };
+  }
+  const distanceKm = area === 'cebu' ? Math.ceil(haversineKm(SHIPPING_ORIGIN, destination)) : null;
+  const priced = priceItems(items, products);
+  if (priced.error) return priced;
+  const { subtotal, items: normalizedItems } = priced;
 
   const shippingFee = area === 'cebu'
     ? Math.round((MINIMUM_SHIPPING_FEE + distanceKm * cebuShippingRate(addressParts.city)) * 100) / 100
@@ -1491,13 +1506,16 @@ app.post('/api/orders', async (req, res) => {
   const { firstName, lastName, email, contact, items = [] } = req.body;
   const paymentMethod = String(req.body.paymentMethod || '');
   const returnPolicyAgreement = req.body.returnPolicyAgreement;
-  const addressParts = cleanAddressParts(req.body.addressParts);
-  const address = addressParts ? formatAddressParts(addressParts) : clean(req.body.address, 400);
+  const isWalkin = req.body.fulfillment === 'walkin';
+  const addressParts = isWalkin ? null : cleanAddressParts(req.body.addressParts);
+  const address = isWalkin
+    ? 'Walk-in purchase (collected at store)'
+    : addressParts ? formatAddressParts(addressParts) : clean(req.body.address, 400);
 
   if (!firstName || !lastName || !address || !email || !contact) {
     return res.status(400).json({ success: false, message: 'Please provide all required order details.' });
   }
-  if (!addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
+  if (!isWalkin && !addressParts) return res.status(400).json({ success: false, message: 'A complete province, city, barangay, and street address is required for shipping.' });
   const returnPolicyAgreedAt = Date.parse(returnPolicyAgreement?.agreedAt || '');
   if (returnPolicyAgreement?.version !== RETURN_POLICY_VERSION || !Number.isFinite(returnPolicyAgreedAt)) {
     return res.status(400).json({ success: false, message: 'Please review and agree to the current return and refund policy before placing your order.' });
@@ -1512,13 +1530,14 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Order quantities must be whole numbers greater than zero.' });
   }
 
-  const destination = cleanPoint(req.body.location) || await deliveryPoint(addressParts);
+  const destination = isWalkin ? null : cleanPoint(req.body.location) || await deliveryPoint(addressParts);
   const order = {
     id: crypto.randomUUID(),
     firstName: clean(firstName, 80),
     lastName: clean(lastName, 80),
     address,
-    addressParts,
+    ...(addressParts ? { addressParts } : {}),
+    fulfillment: isWalkin ? 'walkin' : 'delivery',
     returnPolicyAgreement: {
       version: RETURN_POLICY_VERSION,
       agreedAt: new Date(returnPolicyAgreedAt).toISOString(),
@@ -1538,7 +1557,9 @@ app.post('/api/orders', async (req, res) => {
   try {
     const result = await withLock(async () => {
       const products = await loadProducts();
-      const quote = shippingQuote(items, products, destination, addressParts);
+      const quote = isWalkin
+        ? { ...priceItems(items, products), shippingArea: null, distanceKm: null, shippingFee: 0 }
+        : shippingQuote(items, products, destination, addressParts);
       if (quote.error) return { error: quote.error };
       const quantities = new Map();
       for (const item of items) {
@@ -2379,6 +2400,29 @@ app.patch('/api/admin/orders/:id/status', verifyAdmin, async (req, res) => {
   }
   if (location && status !== 'shipped') {
     return res.status(400).json({ success: false, message: 'A current location can only be set while an order is shipped.' });
+  }
+
+  if (status === 'picked_up') {
+    try {
+      const result = await withLock(async () => {
+        const orders = await loadOrders();
+        const order = orders.find(item => item.id === orderId);
+        if (!order) return { missing: true };
+        if (order.fulfillment !== 'walkin') return { invalid: 'Only walk-in orders can be marked as picked up.' };
+        if (!['processing', 'done'].includes(order.status)) return { invalid: 'This order can no longer be marked as picked up.' };
+        order.status = 'picked_up';
+        order.statusUpdatedAt = new Date().toISOString();
+        order.statusTimes = { ...(order.statusTimes || {}), picked_up: order.statusUpdatedAt };
+        await saveOrders(orders);
+        return { order };
+      });
+      if (result.missing) return res.status(404).json({ success: false, message: 'Order not found.' });
+      if (result.invalid) return res.status(409).json({ success: false, message: result.invalid });
+      return res.json({ success: true, order: result.order });
+    } catch (error) {
+      console.error('Failed to mark walk-in order as picked up:', error);
+      return res.status(500).json({ success: false, message: 'Unable to update this order.' });
+    }
   }
 
   if (status === 'cancelled') {

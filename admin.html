@@ -495,7 +495,7 @@
                 const itemsArr = (order.items || []);
                 const total = Number.isFinite(Number(order.total)) ? Number(order.total) : orderTotals[index] || 0;
                 const createdDate = new Date(order.createdAt).toLocaleString();
-                const status = ['processing', 'done', 'shipped', 'delivered', 'cancelled'].includes(order.status) ? order.status : 'processing';
+                const status = ['processing', 'done', 'shipped', 'delivered', 'picked_up', 'cancelled'].includes(order.status) ? order.status : 'processing';
                 const isDone = status !== 'processing' && status !== 'cancelled';
                 const orderRef = 'PYNX-' + String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
                 const stepKeys = ['preparing_to_ship', 'packaged_for_pickup', 'arrived_at_sorting_center', 'left_sorting_center', 'carrier_processing', 'arrived_at_nearest_hub', 'out_for_delivery', 'delivered'];
@@ -513,9 +513,9 @@
                 }).join('')}</ul>` : '<span class="empty-state">No items</span>';
                 return `<div class="order-card${isDone ? ' order-done' : ''}${status === 'cancelled' ? ' order-cancelled' : ''}" data-search="${esc(searchable)}" data-step="${stepKey}" data-payment="${paymentStatus}">
                     <div class="order-card-header">
-                        <span class="order-number">${esc(orderRef)} <small class="order-ref">${new Date(order.createdAt).toLocaleDateString()}</small></span>
+                        <span class="order-number">${esc(orderRef)} <small class="order-ref">${new Date(order.createdAt).toLocaleDateString()}</small>${order.fulfillment === 'walkin' ? ' <small class="order-ref">Walk-in</small>' : ''}</span>
                         <div class="order-header-actions">
-                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${trackingStep >= 0 ? esc(order.trackingEvents?.[order.trackingEvents.length - 1]?.title || ['Preparing to ship', 'Packaged for pickup', 'Arrived at sorting center', 'Left the sorting center', 'Carrier processing', 'Arrived at nearest hub', 'Out for delivery', 'Delivered'][trackingStep]) : statusLabels[status]}</span>
+                            <span class="order-status-badge ${status === 'cancelled' ? 'cancelled' : isDone ? 'done' : 'pending'}">${trackingStep >= 0 ? esc(order.trackingEvents?.[order.trackingEvents.length - 1]?.title || ['Preparing to ship', 'Packaged for pickup', 'Arrived at sorting center', 'Left the sorting center', 'Carrier processing', 'Arrived at nearest hub', 'Out for delivery', 'Delivered'][trackingStep]) : order.fulfillment === 'walkin' && status === 'processing' ? 'Ready for pickup' : statusLabels[status]}</span>
                             <span class="order-total-badge">₱${total.toFixed(2)}</span>
                             ${orderActions(order, status)}
                             <button type="button" class="order-remove-btn" data-order-id="${esc(order.id)}">Remove order</button>
@@ -647,7 +647,7 @@
         }
     }
 
-    const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled' };
+    const statusLabels = { processing: 'Processing', done: 'Done (packed)', shipped: 'Shipped', delivered: 'Delivered', picked_up: 'Picked up', cancelled: 'Cancelled' };
 
     function receiptStatusHtml(order) {
         const info = order.receiptEmail;
@@ -722,18 +722,22 @@
     ];
 
     function orderActions(order, status) {
+        const isWalkin = order.fulfillment === 'walkin';
         const statusStepIndex = { processing: -1, done: 1, shipped: 3, delivered: 7, cancelled: 7 }[status] ?? -1;
         const stepIndex = Number.isInteger(order.trackingStepIndex)
             ? Math.max(order.trackingStepIndex, statusStepIndex)
             : statusStepIndex;
         const nextMilestone = ADMIN_STATUS_MILESTONES.find(milestone => milestone.stepIndex > stepIndex);
-        const statusControl = nextMilestone && !['cancelled', 'delivered'].includes(status)
+        const statusControl = nextMilestone && !isWalkin && !['cancelled', 'delivered'].includes(status)
             ? `<div class="order-status-control"><select class="order-tracking-select" aria-label="New order status" data-order-id="${esc(order.id)}">${ADMIN_STATUS_MILESTONES.filter(milestone => milestone.stepIndex > stepIndex).map(milestone => `<option value="${milestone.stepIndex}">${esc(milestone.title)}</option>`).join('')}</select><button type="button" class="order-tracking-btn" data-order-id="${esc(order.id)}">Update status</button></div>`
+            : '';
+        const pickupButton = isWalkin && ['processing', 'done'].includes(status)
+            ? `<button type="button" class="order-pickup-btn" data-order-id="${esc(order.id)}">Mark picked up</button>`
             : '';
         const cancelButton = ['processing', 'done'].includes(status)
             ? `<button type="button" class="order-done-btn cancel" data-order-id="${esc(order.id)}" data-status="cancelled">Cancel order</button>`
             : '';
-        const paidButton = order.paymentMethod === 'cash_on_hand' && status === 'delivered' && order.paymentStatus !== 'paid'
+        const paidButton = order.paymentMethod === 'cash_on_hand' && ['delivered', 'picked_up'].includes(status) && order.paymentStatus !== 'paid'
             ? `<button type="button" class="order-payment-btn" data-order-id="${esc(order.id)}">Mark cash received</button>`
             : '';
         const onlinePaid = order.paymentMethod !== 'cash_on_hand' && order.paymentStatus === 'paid';
@@ -743,7 +747,7 @@
         const refundStatus = order.refund
             ? `<p class="order-refund-status">Refund ${esc(order.refund.status || 'requested')}${order.refund.id ? ` (${esc(order.refund.id)})` : ''}</p>`
             : '';
-        return `${statusControl}${paidButton}${cancelButton}${refundButton}${refundStatus}`;
+        return `${statusControl}${pickupButton}${paidButton}${cancelButton}${refundButton}${refundStatus}`;
     }
 
     async function refundOrder(orderId, button) {
@@ -790,7 +794,16 @@
             if (!confirmed) return;
         }
 
-        if (status !== 'cancelled') return;
+        if (status === 'picked_up') {
+            const confirmed = await showAdminDialog({
+                title: 'Mark as picked up?',
+                message: 'Confirm the customer has collected this walk-in order. The order will be completed.',
+                confirmLabel: 'Mark picked up'
+            });
+            if (!confirmed) return;
+        }
+
+        if (status !== 'cancelled' && status !== 'picked_up') return;
         const payload = { status };
         if (button.dataset.askLocation) {
             const answer = await showAdminDialog({
@@ -949,6 +962,11 @@
         const doneButton = event.target.closest('.order-done-btn');
         if (doneButton) {
             setOrderStatus(doneButton.dataset.orderId, doneButton.dataset.status, doneButton);
+            return;
+        }
+        const pickupButton = event.target.closest('.order-pickup-btn');
+        if (pickupButton) {
+            setOrderStatus(pickupButton.dataset.orderId, 'picked_up', pickupButton);
             return;
         }
         const trackingButton = event.target.closest('.order-tracking-btn');

@@ -330,7 +330,7 @@
         document.getElementById('track-map-note').innerHTML = `<span>${current ? 'Latest location of your package' : 'Delivery location'}</span>${links.join('')}`;
     }
 
-    const STATUS_TITLES = { processing: 'Preparing your order', done: 'Waiting for courier', shipped: 'In transit', delivered: 'Order delivered', cancelled: 'Order cancelled' };
+    const STATUS_TITLES = { processing: 'Preparing your order', done: 'Waiting for courier', shipped: 'In transit', delivered: 'Order delivered', picked_up: 'Picked up', cancelled: 'Order cancelled' };
 
     const fmtDay = value => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const fmtClock = value => new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -353,6 +353,7 @@
                 { at: data.order.statusUpdatedAt, title: 'Order cancelled', description: 'You cancelled this order.', major: true },
                 ...(order.events || []),
             ];
+            lastOrderSnapshot = '';
             renderOrder(order);
         } catch (error) {
             errorEl.textContent = error instanceof TypeError
@@ -393,14 +394,23 @@
                 <div class="price">₱${Number(item.price).toFixed(2)}<small>x${esc(item.qty)}</small></div>
             </div>`;
         }).join('');
+        const walkin = order.fulfillment === 'walkin';
+        const cashLabel = walkin ? 'Cash on pickup' : 'Cash on delivery';
+        const walkinTitles = { processing: 'Ready for pickup', picked_up: 'Picked up' };
         const statusMessage = cancelled
             ? `Cancelled on ${fmtDay(order.statusTimes?.cancelled)}`
-            : delivered
-                ? `Delivered on ${fmtDay(order.statusTimes?.delivered)}`
-                : order.status === 'shipped'
-                    ? 'Your package is on the way. Follow the tracking updates below.'
-                    : 'Tracking updates will appear here as your order moves.';
-        const currentTitle = level >= 0 ? TRACKING_LABELS[level] : STATUS_TITLES[order.status] || 'Order received';
+            : walkin
+                ? order.status === 'picked_up'
+                    ? `Picked up on ${fmtDay(order.statusTimes?.picked_up)}`
+                    : 'Your order is ready. Collect it at the store.'
+                : delivered
+                    ? `Delivered on ${fmtDay(order.statusTimes?.delivered)}`
+                    : order.status === 'shipped'
+                        ? 'Your package is on the way. Follow the tracking updates below.'
+                        : 'Tracking updates will appear here as your order moves.';
+        const currentTitle = walkin && walkinTitles[order.status]
+            ? walkinTitles[order.status]
+            : level >= 0 ? TRACKING_LABELS[level] : STATUS_TITLES[order.status] || 'Order received';
         const statusTitle = cancelled ? STATUS_TITLES.cancelled : currentTitle;
         const latestEvent = (order.events || [])[0];
         const lastUpdated = latestEvent?.at || order.statusUpdatedAt || order.createdAt;
@@ -414,14 +424,14 @@
                 <aside class="track-order-panel">
                     <section class="track-section">
                         <div class="track-order-heading">
-                            <div><h2>Order #${esc(order.orderNumber)}</h2><p>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</p></div>
+                            <div><h2>Order #${esc(order.orderNumber)}</h2><p>${esc(order.paymentMethod === 'cash_on_hand' ? cashLabel : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</p></div>
                             <span class="track-status">${esc(statusTitle)}</span>
                         </div>
                         <div class="track-recipient">
                             <svg class="pin" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-                            <div><strong>${esc(recipient.name)} <span style="display:inline;font-weight:400;">${esc(recipient.phone)}</span></strong><span>${esc(recipient.address)}</span></div>
+                            <div><strong>${esc(recipient.name)} <span style="display:inline;font-weight:400;">${esc(recipient.phone)}</span></strong><span>${walkin ? 'Walk-in purchase · collect at store' : esc(recipient.address)}</span></div>
                         </div>
-                        <h3>Delivery updates</h3>
+                        <h3>${walkin ? 'Pickup updates' : 'Delivery updates'}</h3>
                         ${(order.events || []).length ? `<ul class="timeline">${renderTimeline(order.events)}</ul><p class="timeline-note">Times shown in your local time zone</p>` : '<p class="track-timeline-empty">Tracking updates will appear here when available.</p>'}
                     </section>
                     ${canCancelOrder(order) ? '<button type="button" class="btn-secondary track-cancel-order" id="track-cancel-order">Cancel this order</button>' : ''}
@@ -438,8 +448,8 @@
                             <div><h2>${esc(statusTitle)}</h2><p>${esc(statusMessage)}</p></div>
                         </div>
                         <div class="track-delivery-data">
-                            <div><span>Carrier</span><strong>${order.trackingNumber ? 'J&amp;T Express' : 'Not provided'}</strong></div>
-                            <div><span>Estimated delivery</span><strong>Not provided</strong></div>
+                            ${walkin ? '' : `<div><span>Carrier</span><strong>${order.trackingNumber ? 'J&amp;T Express' : 'Not provided'}</strong></div>
+                            <div><span>Estimated delivery</span><strong>Not provided</strong></div>`}
                             <div><span>Last update</span><strong>${lastUpdated ? esc(fmtDay(lastUpdated)) + ' · ' + esc(fmtClock(lastUpdated)) : 'Not available'}</strong></div>
                         </div>
                         ${currentLocation ? `<p class="track-location-note">Latest confirmed location: ${esc(currentLocation)}</p>` : ''}
@@ -455,10 +465,10 @@
                 <div class="track-row"><span>Order number</span><strong>${esc(order.orderNumber)} <button type="button" class="copy-btn" id="copy-order">Copy</button></strong></div>
                 <div class="track-row"><span>Placed on</span><span>${esc(fmtDay(order.createdAt))}, ${esc(fmtClock(order.createdAt))}</span></div>
                 <div class="track-row"><span>Item subtotal</span><strong>₱${Number(order.subtotal || 0).toFixed(2)}</strong></div>
-                <div class="track-row"><span>Additional fee · Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>
+                ${walkin ? '' : `<div class="track-row"><span>Additional fee · Shipping</span><strong>₱${Number(order.shippingFee || 0).toFixed(2)}</strong></div>`}
                 ${Number(order.discount) > 0 ? `<div class="track-row"><span>Voucher ${esc(order.voucherCode || '')}</span><strong>-₱${Number(order.discount).toFixed(2)}</strong></div>` : ''}
                 <div class="track-row"><span>Total to pay</span><strong>₱${Number(order.total).toFixed(2)}</strong></div>
-                <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? 'Cash on delivery' : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
+                <div class="track-row"><span>Payment</span><strong>${esc(order.paymentMethod === 'cash_on_hand' ? cashLabel : order.paymentMethod === 'gcash' ? 'GCash' : order.paymentMethod === 'qrph' ? 'QRPH' : 'Card')} · ${esc(order.paymentStatus || 'pending')}</strong></div>
                 ${waybill}
                 <a class="track-contact" href="/contact.html"><span>Contact us about this order</span><span aria-hidden="true">›</span></a>
             </section>`;
@@ -470,7 +480,11 @@
         const cancelButton = document.getElementById('track-cancel-order');
         if (cancelButton) cancelButton.addEventListener('click', () => cancelTrackedOrder(order, cancelButton));
         try {
-            renderMap(order);
+            if (order.fulfillment === 'walkin') {
+                document.getElementById('track-map-card').hidden = true;
+            } else {
+                renderMap(order);
+            }
         } catch (err) {
             console.error('Map failed to load:', err);
             document.getElementById('track-map').style.display = 'none';
@@ -479,6 +493,62 @@
             mapEmpty.style.display = 'flex';
         }
     }
+
+    const ORDER_REFRESH_INTERVAL_MS = 45 * 1000;
+    let activeLookup = null;
+    let lastOrderSnapshot = '';
+    let orderIsFinal = false;
+    let orderRefreshTimer = null;
+    let refreshingOrder = false;
+
+    function showOrder(order) {
+        lastOrderSnapshot = JSON.stringify(order);
+        orderIsFinal = ['delivered', 'picked_up', 'cancelled'].includes(order.status);
+        renderOrder(order);
+        if (orderIsFinal) stopOrderRefresh();
+    }
+
+    function stopOrderRefresh() {
+        clearInterval(orderRefreshTimer);
+        orderRefreshTimer = null;
+    }
+
+    function startOrderRefresh() {
+        stopOrderRefresh();
+        if (!activeLookup || orderIsFinal || document.hidden) return;
+        orderRefreshTimer = setInterval(refreshOrder, ORDER_REFRESH_INTERVAL_MS);
+    }
+
+    async function refreshOrder() {
+        if (!activeLookup || refreshingOrder || cancelDialog.open) return;
+        refreshingOrder = true;
+        try {
+            const response = activeLookup.id
+                ? await fetch(`${TRACK_API_BASE}/api/orders/track?id=${encodeURIComponent(activeLookup.id)}`, { cache: 'no-store' })
+                : await fetch(`${TRACK_API_BASE}/api/orders/track`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderNumber: activeLookup.orderNumber, email: activeLookup.email }),
+                    cache: 'no-store',
+                });
+            const data = await response.json();
+            if (!response.ok || !data.success) return;
+            if (JSON.stringify(data.order) !== lastOrderSnapshot) showOrder(data.order);
+        } catch (error) {
+            // Keep the last known order on screen; the next refresh will try again.
+        } finally {
+            refreshingOrder = false;
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopOrderRefresh();
+        } else if (activeLookup) {
+            refreshOrder();
+            startOrderRefresh();
+        }
+    });
 
     async function lookup(url, options) {
         errorEl.textContent = '';
@@ -495,21 +565,29 @@
 
     async function loadById(id) {
         const data = await lookup(`${TRACK_API_BASE}/api/orders/track?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
-        if (data) renderOrder(data.order);
-        else formEl.style.display = 'grid';
+        if (data) {
+            activeLookup = { id };
+            showOrder(data.order);
+            startOrderRefresh();
+        } else {
+            formEl.style.display = 'grid';
+        }
     }
 
     formEl.addEventListener('submit', async event => {
         event.preventDefault();
+        const orderNumber = document.getElementById('track-number').value;
+        const email = document.getElementById('track-email').value;
         const data = await lookup(`${TRACK_API_BASE}/api/orders/track`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                orderNumber: document.getElementById('track-number').value,
-                email: document.getElementById('track-email').value,
-            }),
+            body: JSON.stringify({ orderNumber, email }),
         });
-        if (data) renderOrder(data.order);
+        if (data) {
+            activeLookup = { orderNumber, email };
+            showOrder(data.order);
+            startOrderRefresh();
+        }
     });
 
     const orderId = new URLSearchParams(window.location.search).get('id');
