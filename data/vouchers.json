@@ -1,11 +1,22 @@
 [
   {
+    "code": "PYNX5",
+    "type": "percent",
+    "value": 5,
+    "minSubtotal": 0,
+    "startsAt": "2026-11-09T10:55:02.085+08:00",
+    "expiresAt": null,
+    "maxUses": 10,
+    "active": true
+  },
+  {
     "code": "PYNX10",
     "type": "percent",
     "value": 10,
-    "minSubtotal": 500,
+    "minSubtotal": 0,
+    "startsAt": "2026-11-09T10:55:02.085+08:00",
     "expiresAt": null,
-    "maxUses": null,
+    "maxUses": 10,
     "active": true
   }
 ]

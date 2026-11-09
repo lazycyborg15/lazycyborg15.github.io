@@ -166,7 +166,19 @@ async function loadProductsWithPriceMigration() {
   });
 }
 const loadCustomers = () => loadCollection('customers');
-const loadVouchers = () => loadCollection('vouchers');
+const loadVouchers = async () => {
+  const [storedVouchers, seedVouchers] = await Promise.all([
+    loadCollection('vouchers'),
+    Promise.resolve(SEEDS.vouchers || readJsonFile(path.join(SEED_DIR, 'vouchers.json')) || []),
+  ]);
+  const seededByCode = new Map(seedVouchers.map(voucher => [voucher.code, voucher]));
+  const vouchers = storedVouchers.map(voucher => seededByCode.get(voucher.code) || voucher);
+  const storedCodes = new Set(storedVouchers.map(voucher => voucher.code));
+  seedVouchers.forEach(voucher => {
+    if (!storedCodes.has(voucher.code)) vouchers.push(voucher);
+  });
+  return vouchers;
+};
 const saveCustomers = customers => saveCollection('customers', customers);
 const loadReviews = () => loadCollection('reviews');
 const saveReviews = reviews => saveCollection('reviews', reviews);
@@ -1142,11 +1154,15 @@ function applyVoucher(rawCode, subtotal, vouchers, orders) {
   const voucher = (Array.isArray(vouchers) ? vouchers : [])
     .find(item => String(item.code || '').trim().toUpperCase() === code);
   if (!voucher || voucher.active === false) return { error: 'That voucher code is not valid.' };
+  if (voucher.startsAt && new Date(voucher.startsAt).getTime() > Date.now()) return { error: 'This voucher is not available yet.' };
   if (voucher.expiresAt && new Date(voucher.expiresAt).getTime() < Date.now()) return { error: 'This voucher has expired.' };
   const minSubtotal = Number(voucher.minSubtotal) || 0;
   if (subtotal < minSubtotal) return { error: `This voucher needs a subtotal of at least ₱${minSubtotal.toFixed(2)}.` };
   if (Number.isInteger(voucher.maxUses)) {
-    const used = orders.filter(order => order.voucherCode === code && order.status !== 'cancelled').length;
+    const startsAt = voucher.startsAt ? new Date(voucher.startsAt).getTime() : 0;
+    const used = orders.filter(order => order.voucherCode === code
+      && order.status !== 'cancelled'
+      && (!Number.isFinite(startsAt) || !startsAt || new Date(order.createdAt).getTime() >= startsAt)).length;
     if (used >= voucher.maxUses) return { error: 'This voucher has already been used up.' };
   }
   const value = Number(voucher.value) || 0;
@@ -1768,6 +1784,131 @@ app.post('/api/newsletter/unsubscribe', async (req, res) => {
   } catch (error) {
     console.error('Newsletter unsubscribe failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to update your email preferences right now.' });
+  }
+});
+
+app.post('/api/admin/vouchers/notify', verifyAdmin, async (req, res) => {
+  const campaignId = 'pynx-voucher-launch-2026-11';
+  try {
+    const campaignLock = await withLock(async () => {
+      const campaign = await loadCollection('voucherEmailCampaign');
+      const lastUpdated = new Date(campaign.updatedAt || 0).getTime();
+      if (campaign.campaignId === campaignId && campaign.status === 'sent') {
+        return { error: 'The voucher notification has already been sent.', status: 409 };
+      }
+      if (campaign.campaignId === campaignId && campaign.status === 'sending' && Date.now() - lastUpdated < 10 * 60 * 1000) {
+        return { error: 'The voucher notification is already being sent.', status: 409 };
+      }
+
+      const nextCampaign = campaign.campaignId === campaignId
+        ? campaign
+        : { campaignId, status: 'pending', sentEmails: [], failedEmails: [] };
+      nextCampaign.status = 'sending';
+      nextCampaign.updatedAt = new Date().toISOString();
+      await saveCollection('voucherEmailCampaign', nextCampaign);
+      return { campaign: nextCampaign };
+    });
+    if (campaignLock.error) {
+      return res.status(campaignLock.status).json({ success: false, message: campaignLock.error });
+    }
+
+    const campaign = campaignLock.campaign;
+    const sentEmails = new Set(campaign.sentEmails || []);
+    const failedEmails = new Set(campaign.failedEmails || []);
+    const [subscribers, vouchers, orders] = await Promise.all([
+      loadNewsletterSubscribers(),
+      loadVouchers(),
+      loadOrders(),
+    ]);
+    const activeSubscribers = subscribers.filter(subscriber => subscriber.active);
+    for (const email of failedEmails) {
+      if (!activeSubscribers.some(subscriber => subscriber.email === email)) failedEmails.delete(email);
+    }
+    const availableVouchers = vouchers.filter(voucher => {
+      if (voucher.active === false) return false;
+      if (!Number.isInteger(voucher.maxUses)) return true;
+      const startsAt = voucher.startsAt ? new Date(voucher.startsAt).getTime() : 0;
+      const used = orders.filter(order => order.voucherCode === voucher.code
+        && order.status !== 'cancelled'
+        && (!Number.isFinite(startsAt) || !startsAt || new Date(order.createdAt).getTime() >= startsAt)).length;
+      return used < voucher.maxUses;
+    });
+
+    if (!EMAIL_USER || !EMAIL_PASS || !activeSubscribers.length || !availableVouchers.length) {
+      campaign.status = 'pending';
+      campaign.updatedAt = new Date().toISOString();
+      await saveCollection('voucherEmailCampaign', campaign);
+      const message = !EMAIL_USER || !EMAIL_PASS
+        ? 'Email is not configured on the server.'
+        : !activeSubscribers.length
+          ? 'There are no active newsletter subscribers.'
+          : 'There are no active vouchers available.';
+      return res.status(503).json({ success: false, message });
+    }
+
+    const siteBase = String(process.env.SITE_URL || process.env.URL || '').trim().replace(/^["']+|["']+$/g, '').replace(/\/+$/, '');
+    const shopUrl = siteBase ? `${siteBase}/shop.html` : '';
+    const apiBase = newsletterApiBase(req);
+    const offerLines = availableVouchers.map(voucher => {
+      const discount = voucher.type === 'percent' ? `${Number(voucher.value)}% off` : `PHP ${Number(voucher.value).toFixed(2)} off`;
+      const uses = Number.isInteger(voucher.maxUses) ? ` (limited to ${voucher.maxUses} total uses)` : '';
+      const minimum = Number(voucher.minSubtotal) > 0
+        ? `; minimum order subtotal PHP ${Number(voucher.minSubtotal).toFixed(2)}`
+        : '; no minimum order subtotal';
+      return `${voucher.code}: ${discount}${uses}${minimum}.`;
+    });
+    const pending = activeSubscribers.filter(subscriber => !sentEmails.has(subscriber.email));
+    for (const subscriber of pending) {
+      const unsubscribeUrl = `${apiBase}/api/newsletter/unsubscribe?token=${encodeURIComponent(subscriber.unsubscribeToken)}`;
+      const text = [
+        'You are eligible for a limited PYNX voucher.',
+        '',
+        ...offerLines,
+        '',
+        'Enter a code at checkout. Each code is available until its total uses are claimed.',
+        shopUrl ? `Shop now: ${shopUrl}` : 'Visit the PYNX store to shop now.',
+        '',
+        `To stop receiving these emails, unsubscribe here: ${unsubscribeUrl}`,
+      ].join('\n');
+      try {
+        await transporter.sendMail({
+          from: mailFrom(),
+          replyTo: NOTIFY_EMAIL,
+          to: subscriber.email,
+          subject: 'You are eligible for a PYNX voucher',
+          text,
+          headers: {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        });
+        sentEmails.add(subscriber.email);
+        failedEmails.delete(subscriber.email);
+      } catch (error) {
+        console.error('Voucher email notification failed:', error);
+        failedEmails.add(subscriber.email);
+      }
+      campaign.sentEmails = [...sentEmails];
+      campaign.failedEmails = [...failedEmails];
+      campaign.updatedAt = new Date().toISOString();
+      await withLock(() => saveCollection('voucherEmailCampaign', campaign));
+    }
+
+    campaign.status = failedEmails.size ? 'failed' : 'sent';
+    campaign.updatedAt = new Date().toISOString();
+    if (campaign.status === 'sent') campaign.sentAt = campaign.updatedAt;
+    await saveCollection('voucherEmailCampaign', campaign);
+    return res.json({
+      success: campaign.status === 'sent',
+      sent: sentEmails.size,
+      failed: failedEmails.size,
+      message: failedEmails.size
+        ? 'Some voucher emails failed. Retry to send only to recipients not yet notified.'
+        : 'The voucher notification was sent to all active newsletter subscribers.',
+    });
+  } catch (error) {
+    console.error('Voucher notification campaign failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to send the voucher notification.' });
   }
 });
 

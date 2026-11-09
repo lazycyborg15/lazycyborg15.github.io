@@ -163,6 +163,16 @@
                     </div>
                     <div class="product-card admin-product-card">
                         <div class="product-card-body">
+                            <h3>Limited Voucher Campaign</h3>
+                            <p>PYNX5 gives 5% off and PYNX10 gives 10% off. Each shared code is limited to 10 total uses, with no minimum order subtotal.</p>
+                            <div class="product-edit-actions">
+                                <button class="btn-primary" type="button" id="send-voucher-notification">Email Eligible Newsletter Subscribers</button>
+                            </div>
+                            <div class="auth-note admin-status" id="voucher-notification-status" role="status" aria-live="polite">The voucher offer has not been emailed.</div>
+                        </div>
+                    </div>
+                    <div class="product-card admin-product-card">
+                        <div class="product-card-body">
                             <h3>Add New Product</h3>
                             <div class="product-edit-row">
                                 <label for="new-product-name">Product name</label>
@@ -320,6 +330,8 @@
     const contactsStatus = document.getElementById('contacts-status');
     const productsList = document.getElementById('products-list');
     const productsStatus = document.getElementById('products-status');
+    const voucherNotificationButton = document.getElementById('send-voucher-notification');
+    const voucherNotificationStatus = document.getElementById('voucher-notification-status');
     const productCount = document.getElementById('product-count');
     const saleCount = document.getElementById('sale-count');
 
@@ -1281,6 +1293,35 @@
             productsList.innerHTML = '<div class="empty-state-card">Products cannot be loaded right now.</div>';
         }
     }
+
+    voucherNotificationButton.addEventListener('click', async function() {
+        const confirmed = await showAdminDialog({
+            title: 'Email voucher offer?',
+            message: 'This will email all active newsletter subscribers about up to 10 total uses of each code, with no minimum order. The campaign can be sent only once; failed deliveries can be retried.',
+            confirmLabel: 'Send Email',
+        });
+        if (!confirmed) return;
+
+        voucherNotificationButton.disabled = true;
+        voucherNotificationStatus.textContent = 'Sending voucher emails...';
+        voucherNotificationStatus.classList.remove('error');
+        try {
+            const response = await fetch(getApiUrl('/api/admin/vouchers/notify'), {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            const data = await parseResponse(response);
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to send voucher emails.');
+            }
+            voucherNotificationStatus.textContent = `Voucher offer emailed to ${data.sent} newsletter subscriber(s).`;
+        } catch (error) {
+            voucherNotificationStatus.textContent = error.message || 'Unable to send voucher emails.';
+            voucherNotificationStatus.classList.add('error');
+        } finally {
+            voucherNotificationButton.disabled = false;
+        }
+    });
 
     async function saveProduct(productId) {
         const price = Number(document.getElementById(`product-price-${productId}`).value);
